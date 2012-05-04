@@ -8,8 +8,8 @@
 		monthNamesShort: ['Jan','Fev','Mar','Abr','Mai','Jun',
 		'Jul','Ago','Set','Out','Nov','Dez'],
 		dayNames: ['Domingo','Segunda-feira','Terça-feira',
-		'Quarta-feira','Quinta-feira','Sexta-feira','Sabado'],
-		dayNamesShort: ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'],
+		'Quarta-feira','Quinta-feira','Sexta-feira','Sábado'],
+		dayNamesShort: ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],
 		spinnerTexts: ['Agora', 'Campo anterior', 'Campo Seguinte', 'Aumentar', 'Diminuir']};
 	$.dateEntry.setDefaults($.dateEntry.regional['pt']);
 })(jQuery);

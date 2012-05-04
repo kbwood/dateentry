@@ -9,6 +9,6 @@
 		'Jul','Aoû','Sep','Oct','Nov','Déc'],
 		dayNames: ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],
 		dayNamesShort: ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'],
-		spinnerTexts: ['Maintenant', 'Précédent', 'Suivant', 'Augmentez', 'Amoindrissez']};
+		spinnerTexts: ['Maintenant', 'Précédent', 'Suivant', 'Augmenter', 'Diminuer']};
 	$.dateEntry.setDefaults($.dateEntry.regional['fr']);
 })(jQuery);

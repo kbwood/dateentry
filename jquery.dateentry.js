@@ -1,5 +1,5 @@
 /* http://keith-wood.name/dateEntry.html
-   Date entry for jQuery v1.0.5.
+   Date entry for jQuery v1.0.6.
    Written by Keith Wood (kbwood{at}iinet.com.au) March 2009.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -59,8 +59,10 @@ function DateEntry() {
 		spinnerIncDecOnly: false, // True for increment/decrement buttons only, false for all
 		spinnerRepeat: [500, 250], // Initial and subsequent waits in milliseconds
 			// for repeats on the spinner buttons
-		beforeShow: null // Function that takes an input field and
+		beforeShow: null, // Function that takes an input field and
 			// returns a set of custom settings for the date entry
+		altField: null, // Selector, element or jQuery object for an alternate field to keep synchronised
+		altFormat: null // A separate format for the alternate field
 	};
 	$.extend(this._defaults, this.regional['']);
 }
@@ -214,8 +216,13 @@ $.extend(DateEntry.prototype, {
 	_setDateDateEntry: function(input, date) {
 		var inst = $.data(input, PROP_NAME);
 		if (inst) {
-			this._setDate(inst, date ? (typeof date == 'object' ?
-				this._daylightSavingAdjust(new Date(date.getTime())) : date) : null);
+			if (date === null || date === '') {
+				inst.input.val('');
+			}
+			else {
+				this._setDate(inst,
+					date ? (typeof date == 'object' ? new Date(date.getTime()) : date) : null);
+			}
 		}
 	},
 
@@ -373,6 +380,9 @@ $.extend(DateEntry.prototype, {
 	_expandSpinner: function(event) {
 		var spinner = $.dateEntry._getSpinnerTarget(event);
 		var inst = $.data($.dateEntry._getInput(spinner), PROP_NAME);
+		if ($.dateEntry._isDisabledDateEntry(inst.input[0])) {
+			return;
+		}
 		var spinnerBigImage = $.dateEntry._get(inst, 'spinnerBigImage');
 		if (spinnerBigImage) {
 			inst._expanded = true;
@@ -608,8 +618,7 @@ $.extend(DateEntry.prototype, {
 	   @param  inst  (object) the instance settings */
 	_parseDate: function(inst) {
 		var currentDate = this._extractDate(inst.input.val(), inst) ||
-			this._normaliseDate(this._determineDate(this._get(inst, 'defaultDate'), inst) ||
-			this._daylightSavingAdjust(new Date()));
+			this._normaliseDate(this._determineDate(this._get(inst, 'defaultDate'), inst) || new Date());
 		inst._selectedYear = currentDate.getFullYear();
 		inst._selectedMonth = currentDate.getMonth();
 		inst._selectedDay = currentDate.getDate();
@@ -658,18 +667,25 @@ $.extend(DateEntry.prototype, {
 				case 'd': day = num; break;
 			}
 		}
-		return (year && month && day ?
-			this._daylightSavingAdjust(new Date(year, month - 1, day)) : null);
+		return (year && month && day ? new Date(year, month - 1, day, 12) : null);
 	},
 
 	/* Set the selected date into the input field.
 	   @param  inst  (object) the instance settings */
 	_showDate: function(inst) {
-		var dateFormat = this._get(inst, 'dateFormat');
+		this._setValue(inst, this._formatDate(inst, this._get(inst, 'dateFormat')));
+		this._showField(inst);
+	},
+
+	/* Format a date as requested.
+	   @param  inst    (object) the instance settings
+	   @param  format  (string) the date format to use
+	   @return  (string) the formatted date */
+	_formatDate: function(inst, format) {
 		var currentDate = '';
 		for (var i = 0; i < 3; i++) {
-			currentDate += (i == 0 ? '' : dateFormat.charAt(3));
-			var field = dateFormat.charAt(i);
+			currentDate += (i == 0 ? '' : format.charAt(3));
+			var field = format.charAt(i);
 			switch (field) {
 				case 'y':
 					currentDate += this._formatNumber(inst._selectedYear);
@@ -689,14 +705,12 @@ $.extend(DateEntry.prototype, {
 					break;
 				case 'w': case 'W':
 					currentDate += this._get(inst, (field == 'W' ? 'dayNames' : 'dayNamesShort'))[
-						this._daylightSavingAdjust(new Date(
-						inst._selectedYear, inst._selectedMonth, inst._selectedDay)).getDay()] +
+						new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay, 12).getDay()] +
 						' ' + this._formatNumber(inst._selectedDay);
 					break;
 			}
 		}
-		this._setValue(inst, currentDate);
-		this._showField(inst);
+		return currentDate;
 	},
 
 	/* Highlight the current date field.
@@ -740,8 +754,8 @@ $.extend(DateEntry.prototype, {
 					[inst._selectedMonth].length;
 			case 'w': case 'W':
 				return this._get(inst, (field == 'W' ? 'dayNames' : 'dayNamesShort'))
-					[this._daylightSavingAdjust(new Date(inst._selectedYear,
-					inst._selectedMonth, inst._selectedDay)).getDay()].length + 3;
+					[new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay, 12).
+					getDay()].length + 3;
 			default: return 2;
 		}
 	},
@@ -758,6 +772,11 @@ $.extend(DateEntry.prototype, {
 	   @param  value  (string) the new value */
 	_setValue: function(inst, value) {
 		if (value != inst.input.val()) {
+			var altField = this._get(inst, 'altField');
+			if (altField) {
+				$(altField).val(!value ? '' : this._formatDate(inst,
+					this._get(inst, 'altFormat') || this._get(inst, 'dateFormat')));
+			}
 			inst.input.val(value).trigger('change');
 		}
 	},
@@ -792,7 +811,7 @@ $.extend(DateEntry.prototype, {
 		var day = (field == 'd' || field == 'w' || field == 'W' ?
 			inst._selectedDay + offset :
 			Math.min(inst._selectedDay, this._getDaysInMonth(year, month)));
-		this._setDate(inst, this._daylightSavingAdjust(new Date(year, month, day)));
+		this._setDate(inst, new Date(year, month, day, 12));
 	},
 
 	/* Find the number of days in a given month.
@@ -800,7 +819,7 @@ $.extend(DateEntry.prototype, {
 	   @param  month  (number) the month (0 to 11)
 	   @return  (number) the number of days in this month */
 	_getDaysInMonth: function(year, month) {
-		return 32 - new Date(year, month, 32).getDate();
+		return new Date(year, month + 1, 0, 12).getDate();
 	},
 
 	/* Check against minimum/maximum and display date.
@@ -810,8 +829,8 @@ $.extend(DateEntry.prototype, {
 					 (string) units and periods of offsets from now */
 	_setDate: function(inst, date) {
 		// Normalise to base time
-		date = this._normaliseDate(this._determineDate(date || this._get(inst, 'defaultDate'), inst) ||
-			this._daylightSavingAdjust(new Date()));
+		date = this._normaliseDate(
+			this._determineDate(date || this._get(inst, 'defaultDate'), inst) || new Date());
 		var minDate = this._normaliseDate(this._determineDate(this._get(inst, 'minDate'), inst));
 		var maxDate = this._normaliseDate(this._determineDate(this._get(inst, 'maxDate'), inst));
 		// Ensure it is within the bounds set
@@ -833,17 +852,17 @@ $.extend(DateEntry.prototype, {
 	   @return  (Date) the calculated date */
 	_determineDate: function(setting, inst) {
 		var offsetNumeric = function(offset) { // E.g. +300, -2
-			var date = new Date();
+			var date = $.dateEntry._normaliseDate(new Date());
 			date.setDate(date.getDate() + offset);
 			return date;
 		};
-		var offsetString = function(offset) { // E.g. '+2m', '-4h', '+3h +30m'
+		var offsetString = function(offset) { // E.g. '+2m', '-1w', '+3m +10d'
 			var date = $.dateEntry._extractDate(offset, inst);
 			if (date) {
 				return date;
 			}
 			offset = offset.toLowerCase();
-			date = new Date();
+			date = $.dateEntry._normaliseDate(new Date());
 			var year = date.getFullYear();
 			var month = date.getMonth();
 			var day = date.getDate();
@@ -862,7 +881,7 @@ $.extend(DateEntry.prototype, {
 				}
 				matches = pattern.exec(offset);
 			}
-			return $.dateEntry._daylightSavingAdjust(new Date(year, month, day));
+			return new Date(year, month, day, 12);
 		};
 		return (setting ? (typeof setting == 'string' ? offsetString(setting) :
 			(typeof setting == 'number' ? offsetNumeric(setting) : setting)) : null);
@@ -872,25 +891,9 @@ $.extend(DateEntry.prototype, {
 	   @param  date  (Date) the original date
 	   @return  (Date) the normalised date */
 	_normaliseDate: function(date) {
-		if (!date) {
-			return null;
+		if (date) {
+			date.setHours(12, 0, 0, 0);
 		}
-		date.setHours(0);
-		date.setMinutes(0);
-		date.setSeconds(0);
-		date.setMilliseconds(0);
-		return this._daylightSavingAdjust(date);
-	},
-
-	/* Handle switch to/from daylight saving.
-	   Hours may be non-zero on daylight saving cut-over:
-	   > 12 when midnight changeover, but then cannot generate
-	   midnight datetime, so jump to 1AM, otherwise reset.
-	   @param  date  (Date) the date to check
-	   @return  (Date) the corrected date */
-	_daylightSavingAdjust: function(date) {
-		if (!date) return null;
-		date.setHours(date.getHours() > 12 ? date.getHours() + 2 : 0);
 		return date;
 	},
 
@@ -914,9 +917,38 @@ $.extend(DateEntry.prototype, {
 				inst._selectedDay : (value >= 1 &&
 				value <= this._getDaysInMonth(year, month - 1) ? value :
 				(key > 0 ? key : inst._selectedDay)));
-			this._setDate(inst, this._daylightSavingAdjust(new Date(year, month - 1, day)));
+			this._setDate(inst, new Date(year, month - 1, day, 12));
 			inst._lastChr = (field != 'y' ? '' :
 				inst._lastChr.substr(Math.max(0, inst._lastChr.length - 2))) + chr;
+		}
+		else { // Allow text entry by month name
+			var field = dateFormat.charAt(inst._field);
+			if (field == 'n' || field == 'N') {
+				inst._lastChr += chr.toLowerCase();
+				var names = this._get(inst, (field == 'n' ? 'monthNamesShort' : 'monthNames'));
+				var findMonth = function() {
+					for (var i = 0; i < names.length; i++) {
+						if (names[i].toLowerCase().substring(0, inst._lastChr.length) == inst._lastChr) {
+							return i;
+							break;
+						}
+					}
+					return -1;
+				};
+				var month = findMonth();
+				if (month == -1) {
+					inst._lastChr = chr.toLowerCase();
+					month = findMonth();
+				}
+				if (month == -1) {
+					inst._lastChr = '';
+				}
+				else {
+					var year = inst._selectedYear;
+					var day = Math.min(inst._selectedDay, this._getDaysInMonth(year, month));
+					this._setDate(inst, new Date(year, month, day, 12));
+				}
+			}
 		}
 	}
 });
