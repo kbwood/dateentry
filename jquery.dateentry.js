@@ -1,5 +1,5 @@
 /* http://keith-wood.name/dateEntry.html
-   Time entry for jQuery v1.0.0.
+   Time entry for jQuery v1.0.1.
    Written by Keith Wood (kbwood{at}iinet.com.au) March 2009.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -112,7 +112,7 @@ $.extend(DateEntry.prototype, {
 		input.addClass(this.markerClassName).bind('focus.dateEntry', this._doFocus).
 			bind('blur.dateEntry', this._doBlur).bind('click.dateEntry', this._doClick).
 			bind('keydown.dateEntry', this._doKeyDown).bind('keypress.dateEntry', this._doKeyPress);
-		// check pastes
+		// Check pastes
 		if ($.browser.mozilla) {
 			input.bind('input.dateEntry', function(event) { $.dateEntry._parseDate(inst); });
 		}
@@ -120,7 +120,7 @@ $.extend(DateEntry.prototype, {
 			input.bind('paste.dateEntry', 
 				function(event) { setTimeout(function() { $.dateEntry._parseDate(inst); }, 1); });
 		}
-		// allow mouse wheel usage
+		// Allow mouse wheel usage
 		if (this._get(inst, 'useMouseWheel') && $.fn.mousewheel) {
 			input.mousewheel(this._doMouseWheel);
 		}
@@ -156,7 +156,7 @@ $.extend(DateEntry.prototype, {
 			$.dateEntry._changeSpinner(inst, input.nextSibling, (disable ? 5 : -1));
 		}
 		$.dateEntry._disabledInputs = $.map($.dateEntry._disabledInputs,
-			function(value) { return (value == input ? null : value); }); // delete entry
+			function(value) { return (value == input ? null : value); }); // Delete entry
 		if (disable) {
 			$.dateEntry._disabledInputs.push(input);
 		}
@@ -192,18 +192,11 @@ $.extend(DateEntry.prototype, {
 			return;
 		}
 		$input.removeClass(this.markerClassName).unbind('.dateEntry');
-		// check pastes
-		if ($.browser.mozilla) {
-			$input.unbind('input.dateEntry');
-		}
-		if ($.browser.msie) {
-			$input.unbind('paste.dateEntry');
-		}
 		if ($.fn.mousewheel) {
 			$input.unmousewheel();
 		}
 		this._disabledInputs = $.map(this._disabledInputs,
-			function(value) { return (value == input ? null : value); }); // delete entry
+			function(value) { return (value == input ? null : value); }); // Delete entry
 		$input.parent().replaceWith($input);
 		$.removeData(input, PROP_NAME);
 	},
@@ -232,10 +225,8 @@ $.extend(DateEntry.prototype, {
 	                   (event) the focus event */
 	_doFocus: function(target) {
 		var input = (target.nodeName && target.nodeName.toLowerCase() == 'input' ? target : this);
-		if ($.dateEntry._lastInput == input) { // already here
-			return;
-		}
-		if ($.dateEntry._isDisabledDateEntry(input)) {
+		if ($.dateEntry._lastInput == input || $.dateEntry._isDisabledDateEntry(input)) {
+			$.dateEntry._focussed = false;
 			return;
 		}
 		var inst = $.data(input, PROP_NAME);
@@ -246,6 +237,7 @@ $.extend(DateEntry.prototype, {
 		extendRemove(inst.options, (beforeShow ? beforeShow.apply(input, [input]) : {}));
 		$.data(input, PROP_NAME, inst);
 		$.dateEntry._parseDate(inst);
+		setTimeout(function() { $.dateEntry._showField(inst); }, 10);
 	},
 
 	/* Note that the field has been exited.
@@ -263,28 +255,32 @@ $.extend(DateEntry.prototype, {
 		if (!$.dateEntry._focussed) {
 			var dateFormat = $.dateEntry._get(inst, 'dateFormat');
 			inst._field = 0;
-			if ($.browser.msie) { // check against bounding boxes
-				var value = input.value;
-				var offsetX = event.clientX + document.documentElement.scrollLeft -
-					$(event.srcElement).offset().left;
+			if (input.selectionStart != null) { // Use input select range
 				var end = 0;
 				for (var field = 0; field < 3; field++) {
 					end += $.dateEntry._fieldLength(inst, field, dateFormat) + 1;
-					input.value = value.substring(0, end); // trim to this size
-					var range = input.createTextRange();
-					if (offsetX < range.boundingWidth) { // and compare
-						inst._field = field;
+					inst._field = field;
+					if (input.selectionStart < end) {
 						break;
 					}
 				}
-				input.value = value; // restore original value
 			}
-			else { // use input select range
+			else if (input.createTextRange) { // Check against bounding boxes
+				var src = $(event.srcElement);
+				var range = input.createTextRange();
+				var convert = function(value) {
+					return {thin: 2, medium: 4, thick: 6}[value] || value;
+				};
+				var offsetX = event.clientX + document.documentElement.scrollLeft -
+					(src.offset().left + parseInt(convert(src.css('border-left-width')), 10)) -
+					range.offsetLeft; // Position - left edge - alignment
 				var end = 0;
 				for (var field = 0; field < 3; field++) {
 					end += $.dateEntry._fieldLength(inst, field, dateFormat) + 1;
-					if (input.selectionStart < end) {
-						inst._field = field;
+					range.collapse();
+					range.moveEnd('character', end);
+					inst._field = field;
+					if (offsetX < range.boundingWidth) { // And compare
 						break;
 					}
 				}
@@ -305,31 +301,31 @@ $.extend(DateEntry.prototype, {
 		var inst = $.data(event.target, PROP_NAME);
 		switch (event.keyCode) {
 			case 9: return (event.shiftKey ?
-						// move to previous date field, or out if at the beginning
-						$.dateEntry._previousField(inst, true) :
-						// move to next date field, or out if at the end
-						$.dateEntry._nextField(inst, true));
-			case 35: if (event.ctrlKey) { // clear date on ctrl+end
+						// Move to previous date field, or out if at the beginning
+						$.dateEntry._changeField(inst, -1, true) :
+						// Move to next date field, or out if at the end
+						$.dateEntry._changeField(inst, +1, true));
+			case 35: if (event.ctrlKey) { // Clear date on ctrl+end
 						$.dateEntry._setValue(inst, '');
 					}
-					else { // last field on end
+					else { // Last field on end
 						inst._field = 2;
 						$.dateEntry._adjustField(inst, 0);
 					}
 					break;
-			case 36: if (event.ctrlKey) { // current date on ctrl+home
+			case 36: if (event.ctrlKey) { // Current date on ctrl+home
 						$.dateEntry._setDate(inst);
 					}
-					else { // first field on home
+					else { // First field on home
 						inst._field = 0;
 						$.dateEntry._adjustField(inst, 0);
 					}
 					break;
-			case 37: $.dateEntry._previousField(inst, false); break; // previous field on left
-			case 38: $.dateEntry._adjustField(inst, +1); break; // increment date field on up
-			case 39: $.dateEntry._nextField(inst, false); break; // next field on right
-			case 40: $.dateEntry._adjustField(inst, -1); break; // decrement date field on down
-			case 46: $.dateEntry._setValue(inst, ''); break; // clear date on delete
+			case 37: $.dateEntry._changeField(inst, -1, false); break; // Previous field on left
+			case 38: $.dateEntry._adjustField(inst, +1); break; // Increment date field on up
+			case 39: $.dateEntry._changeField(inst, +1, false); break; // Next field on right
+			case 40: $.dateEntry._adjustField(inst, -1); break; // Decrement date field on down
+			case 46: $.dateEntry._setValue(inst, ''); break; // Clear date on delete
 		}
 		return false;
 	},
@@ -373,11 +369,21 @@ $.extend(DateEntry.prototype, {
 		if (spinnerBigImage) {
 			inst._expanded = true;
 			var offset = $(spinner).offset();
+			var relative = null;
+			$(spinner).parents().each(function() {
+				var parent = $(this);
+				if (parent.css('position') == 'relative' ||
+						parent.css('position') == 'absolute') {
+					relative = parent.offset();
+				}
+				return !relative;
+			});
 			var spinnerSize = $.dateEntry._get(inst, 'spinnerSize');
 			var spinnerBigSize = $.dateEntry._get(inst, 'spinnerBigSize');
 			$('<div class="dateEntry_expand" style="position: absolute; left: ' +
-				(offset.left - (spinnerBigSize[0] - spinnerSize[0]) / 2) +
-				'px; top: ' + (offset.top - (spinnerBigSize[1] - spinnerSize[1]) / 2) +
+				(offset.left - (spinnerBigSize[0] - spinnerSize[0]) / 2 -
+				(relative ? relative.left : 0)) + 'px; top: ' + (offset.top -
+				(spinnerBigSize[1] - spinnerSize[1]) / 2 - (relative ? relative.top : 0)) +
 				'px; width: ' + spinnerBigSize[0] +
 				'px; height: ' + spinnerBigSize[1] + 'px; background: #fff url(' +
 				spinnerBigImage + ') no-repeat 0px 0px; z-index: 10;"></div>').
@@ -421,8 +427,9 @@ $.extend(DateEntry.prototype, {
 		$.dateEntry._changeSpinner(inst, spinner, region);
 		$.dateEntry._actionSpinner(inst, region);
 		$.dateEntry._timer = null;
+		$.dateEntry._handlingSpinner = true;
 		var spinnerRepeat = $.dateEntry._get(inst, 'spinnerRepeat');
-		if (region >= 3 && spinnerRepeat[0]) { // repeat increment/decrement
+		if (region >= 3 && spinnerRepeat[0]) { // Repeat increment/decrement
 			$.dateEntry._timer = setTimeout(
 				function() { $.dateEntry._repeatSpinner(inst, region); },
 				spinnerRepeat[0]);
@@ -440,8 +447,8 @@ $.extend(DateEntry.prototype, {
 		}
 		switch (region) {
 			case 0: this._setDate(inst); break;
-			case 1: this._previousField(inst, false); break;
-			case 2: this._nextField(inst, false); break;
+			case 1: this._changeField(inst, -1, false); break;
+			case 2: this._changeField(inst, +1, false); break;
 			case 3: this._adjustField(inst, +1); break;
 			case 4: this._adjustField(inst, -1); break;
 		}
@@ -489,12 +496,13 @@ $.extend(DateEntry.prototype, {
 		if (!$.dateEntry._isDisabledDateEntry(input)) {
 			$.dateEntry._changeSpinner(inst, spinner, -1);
 		}
-		if (!$.browser.opera) {
+		if ($.dateEntry._handlingSpinner) {
 			$.dateEntry._lastInput = $.dateEntry._blurredInput;
 		}
-		if ($.dateEntry._lastInput) {
+		if ($.dateEntry._lastInput && $.dateEntry._handlingSpinner) {
 			$.dateEntry._showField(inst);
 		}
+		$.dateEntry._handlingSpinner = false;
 	},
 
 	/* Retrieve the spinner from the event.
@@ -524,10 +532,10 @@ $.extend(DateEntry.prototype, {
 		var bottom = spinnerSize[1] - 1 - top;
 		if (spinnerSize[2] > 0 && Math.abs(left - right) <= spinnerSize[2] &&
 				Math.abs(top - bottom) <= spinnerSize[2]) {
-			return 0; // centre button
+			return 0; // Centre button
 		}
 		var min = Math.min(left, top, right, bottom);
-		return (min == left ? 1 : (min == right ? 2 : (min == top ? 3 : 4))); // nearest edge
+		return (min == left ? 1 : (min == right ? 2 : (min == top ? 3 : 4))); // Nearest edge
 	},
 
 	/* Change the spinner image depending on button clicked.
@@ -732,37 +740,25 @@ $.extend(DateEntry.prototype, {
 	   @param  inst   (object) the instance settings
 	   @param  value  (string) the new value */
 	_setValue: function(inst, value) {
-		inst.input.val(value).trigger('change');
+		if (value != inst.input.val()) {
+			inst.input.val(value).trigger('change');
+		}
 	},
 
-	/* Move to previous field, or out of field altogether if appropriate.
+	/* Move to previous/next field, or out of field altogether if appropriate.
 	   @param  inst     (object) the instance settings
+	   @param  offset   (number) the direction of change (-1, +1)
 	   @param  moveOut  (boolean) true if can move out of the field
 	   @return  (boolean) true if exitting the field, false if not */
-	_previousField: function(inst, moveOut) {
-		var atFirst = (inst.input.val() == '' || inst._field == 0);
-		if (!atFirst) {
-			inst._field--;
+	_changeField: function(inst, offset, moveOut) {
+		var atFirstLast = (inst.input.val() == '' || inst._field == (offset == -1 ? 0 : 2));
+		if (!atFirstLast) {
+			inst._field += offset;
 		}
 		this._showField(inst);
 		inst._lastChr = '';
 		$.data(inst.input[0], PROP_NAME, inst);
-		return (atFirst && moveOut);
-	},
-
-	/* Move to next field, or out of field altogether if appropriate.
-	   @param  inst     (object) the instance settings
-	   @param  moveOut  (boolean) true if can move out of the field
-	   @return  (boolean) true if exitting the field, false if not */
-	_nextField: function(inst, moveOut) {
-		var atLast = (inst.input.val() == '' || inst._field == 2);
-		if (!atLast) {
-			inst._field++;
-		}
-		this._showField(inst);
-		inst._lastChr = '';
-		$.data(inst.input[0], PROP_NAME, inst);
-		return (atLast && moveOut);
+		return (atFirstLast && moveOut);
 	},
 
 	/* Update the current field in the direction indicated.
@@ -796,12 +792,12 @@ $.extend(DateEntry.prototype, {
 	                 (number) offset in days from now or
 					 (string) units and periods of offsets from now */
 	_setDate: function(inst, date) {
-		// normalise to base time
+		// Normalise to base time
 		date = this._normaliseDate(this._determineDate(
 			date || this._get(inst, 'defaultDate')) || new Date());
 		var minDate = this._normaliseDate(this._determineDate(this._get(inst, 'minDate')));
 		var maxDate = this._normaliseDate(this._determineDate(this._get(inst, 'maxDate')));
-		// ensure it is within the bounds set
+		// Ensure it is within the bounds set
 		date = (minDate && date < minDate ? minDate :
 			(maxDate && date > maxDate ? maxDate : date));
 		inst._selectedYear = date.getFullYear();
@@ -817,18 +813,19 @@ $.extend(DateEntry.prototype, {
 	                    (string) units and periods of offsets from now
 	   @return  (Date) the calculated date */
 	_determineDate: function(setting) {
-		var offsetNumeric = function(offset) { // e.g. +300, -2
+		var offsetNumeric = function(offset) { // E.g. +300, -2
 			var date = new Date();
 			date.setDate(date.getDate() + offset);
 			return date;
 		};
-		var offsetString = function(offset) { // e.g. '+2m', '-4h', '+3h +30m'
+		var offsetString = function(offset) { // E.g. '+2m', '-4h', '+3h +30m'
+			offset = offset.toLowerCase();
 			var date = new Date();
 			var year = date.getFullYear();
 			var month = date.getMonth();
 			var day = date.getDate();
 			var pattern = /([+-]?[0-9]+)\s*(d|w|m|y)?/g;
-			var matches = pattern.exec(offset.toLowerCase());
+			var matches = pattern.exec(offset);
 			while (matches) {
 				switch (matches[2] || 'd') {
 					case 'd':
@@ -868,9 +865,9 @@ $.extend(DateEntry.prototype, {
 	_handleKeyPress: function(inst, chr) {
 		var dateFormat = this._get(inst, 'dateFormat');
 		if (chr == dateFormat.charAt(3)) {
-			this._nextField(inst, false);
+			this._changeField(inst, +1, false);
 		}
-		else if (chr >= '0' && chr <= '9') { // allow direct entry of date
+		else if (chr >= '0' && chr <= '9') { // Allow direct entry of date
 			var field = dateFormat.charAt(inst._field);
 			var value = parseInt(inst._lastChr + chr, 10);
 			var year = (field == 'y' ? value : inst._selectedYear);
@@ -915,12 +912,11 @@ $.fn.dateEntry = function(options) {
 				$.dateEntry['_' + options + 'DateEntry'].apply($.dateEntry, [this].concat(otherArgs));
 			}
 			else {
-				// check for settings on the control itself - in namespace 'date:'
+				// Check for settings on the control itself - in namespace 'date:'
 				var inlineSettings = {};
 				for (attrName in $.dateEntry._defaults) {
 					var attrValue = this.getAttribute('date:' + attrName);
 					if (attrValue) {
-						inlineSettings = inlineSettings || {};
 						try {
 							inlineSettings[attrName] = eval(attrValue);
 						}
@@ -936,6 +932,6 @@ $.fn.dateEntry = function(options) {
 };
 
 /* Initialise the time entry functionality. */
-$.dateEntry = new DateEntry(); // singleton instance
+$.dateEntry = new DateEntry(); // Singleton instance
 
 })(jQuery);
