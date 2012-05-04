@@ -1,5 +1,5 @@
 /* http://keith-wood.name/dateEntry.html
-   Date entry for jQuery v1.0.3.
+   Date entry for jQuery v1.0.4.
    Written by Keith Wood (kbwood{at}iinet.com.au) March 2009.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -208,7 +208,7 @@ $.extend(DateEntry.prototype, {
 		var inst = $.data(input, PROP_NAME);
 		if (inst) {
 			this._setDate(inst, date ? (typeof date == 'object' ?
-				new Date(date.getTime()) : date) : null);
+				this._daylightSavingAdjust(new Date(date.getTime())) : date) : null);
 		}
 	},
 
@@ -601,7 +601,8 @@ $.extend(DateEntry.prototype, {
 	   @param  inst  (object) the instance settings */
 	_parseDate: function(inst) {
 		var currentDate = this._extractDate(inst) || this._normaliseDate(
-			this._determineDate(this._get(inst, 'defaultDate')) || new Date());
+			this._determineDate(this._get(inst, 'defaultDate')) ||
+			this._daylightSavingAdjust(new Date()));
 		var dateFormat = this._get(inst, 'dateFormat');
 		inst._selectedYear = currentDate.getFullYear();
 		inst._selectedMonth = currentDate.getMonth();
@@ -647,7 +648,8 @@ $.extend(DateEntry.prototype, {
 				case 'd': day = num; break;
 			}
 		}
-		return (year && month && day ? new Date(year, month - 1, day) : null);
+		return (year && month && day ?
+			this._daylightSavingAdjust(new Date(year, month - 1, day)) : null);
 	},
 
 	/* Set the selected date into the input field.
@@ -674,7 +676,8 @@ $.extend(DateEntry.prototype, {
 					break;
 				case 'w': case 'W':
 					currentDate += this._get(inst, (field == 'W' ? 'dayNames' : 'dayNamesShort'))[
-						new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay).getDay()] +
+						this._daylightSavingAdjust(new Date(
+						inst._selectedYear, inst._selectedMonth, inst._selectedDay)).getDay()] +
 						' ' + this._formatNumber(inst._selectedDay);
 					break;
 			}
@@ -724,8 +727,8 @@ $.extend(DateEntry.prototype, {
 					[inst._selectedMonth].length;
 			case 'w': case 'W':
 				return this._get(inst, (field == 'W' ? 'dayNames' : 'dayNamesShort'))
-					[new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay).
-					getDay()].length + 3;
+					[this._daylightSavingAdjust(new Date(inst._selectedYear,
+					inst._selectedMonth, inst._selectedDay)).getDay()].length + 3;
 			default: return 2;
 		}
 	},
@@ -776,7 +779,7 @@ $.extend(DateEntry.prototype, {
 		var day = (field == 'd' || field == 'w' || field == 'W' ?
 			inst._selectedDay + offset :
 			Math.min(inst._selectedDay, this._getDaysInMonth(year, month)));
-		this._setDate(inst, new Date(year, month, day));
+		this._setDate(inst, this._daylightSavingAdjust(new Date(year, month, day)));
 	},
 
 	/* Find the number of days in a given month.
@@ -795,7 +798,7 @@ $.extend(DateEntry.prototype, {
 	_setDate: function(inst, date) {
 		// Normalise to base time
 		date = this._normaliseDate(this._determineDate(
-			date || this._get(inst, 'defaultDate')) || new Date());
+			date || this._get(inst, 'defaultDate')) || this._daylightSavingAdjust(new Date()));
 		var minDate = this._normaliseDate(this._determineDate(this._get(inst, 'minDate')));
 		var maxDate = this._normaliseDate(this._determineDate(this._get(inst, 'maxDate')));
 		// Ensure it is within the bounds set
@@ -840,7 +843,7 @@ $.extend(DateEntry.prototype, {
 				}
 				matches = pattern.exec(offset);
 			}
-			return new Date(year, month, day);
+			return $.dateEntry._daylightSavingAdjust(new Date(year, month, day));
 		};
 		return (setting ? (typeof setting == 'string' ? offsetString(setting) :
 			(typeof setting == 'number' ? offsetNumeric(setting) : setting)) : null);
@@ -857,6 +860,18 @@ $.extend(DateEntry.prototype, {
 		date.setMinutes(0);
 		date.setSeconds(0);
 		date.setMilliseconds(0);
+		return this._daylightSavingAdjust(date);
+	},
+
+	/* Handle switch to/from daylight saving.
+	   Hours may be non-zero on daylight saving cut-over:
+	   > 12 when midnight changeover, but then cannot generate
+	   midnight datetime, so jump to 1AM, otherwise reset.
+	   @param  date  (Date) the date to check
+	   @return  (Date) the corrected date */
+	_daylightSavingAdjust: function(date) {
+		if (!date) return null;
+		date.setHours(date.getHours() > 12 ? date.getHours() + 2 : 0);
 		return date;
 	},
 
@@ -880,7 +895,7 @@ $.extend(DateEntry.prototype, {
 				inst._selectedDay : (value >= 1 &&
 				value <= this._getDaysInMonth(year, month - 1) ? value :
 				(key > 0 ? key : inst._selectedDay)));
-			this._setDate(inst, new Date(year, month - 1, day));
+			this._setDate(inst, this._daylightSavingAdjust(new Date(year, month - 1, day)));
 			inst._lastChr = (field != 'y' ? '' :
 				inst._lastChr.substr(Math.max(0, inst._lastChr.length - 2))) + chr;
 		}
