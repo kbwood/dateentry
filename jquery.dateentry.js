@@ -1,5 +1,5 @@
 /* http://keith-wood.name/dateEntry.html
-   Date entry for jQuery v1.0.4.
+   Date entry for jQuery v1.0.5.
    Written by Keith Wood (kbwood{at}iinet.com.au) March 2009.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -26,10 +26,10 @@ function DateEntry() {
 	this.regional = []; // Available regional settings, indexed by language code
 	this.regional[''] = { // Default regional settings
 		dateFormat: 'mdy/', // The format of the date text:
-			// first three fields in order ('y' for year, 'm' for month,
-			// 'n' for abbreviated month name, 'N' for full month name,
+			// first three fields in order ('y' for year, 'Y' for two-digit year,
+			// 'm' for month, 'n' for abbreviated month name, 'N' for full month name,
 			// 'd' for day, 'w' for abbreviated day name and number,
-			// 'W' for full day name and number), followed by separator 
+			// 'W' for full day name and number), followed by separator(s) 
 		monthNames: ['January', 'February', 'March', 'April', 'May', 'June',
 			'July', 'August', 'September', 'October', 'November', 'December'], // Names of the months
 		monthNamesShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -170,12 +170,19 @@ $.extend(DateEntry.prototype, {
 	},
 
 	/* Reconfigure the settings for a date entry field.
-	   @param  input    (element) input field to change
-	   @param  options  (object) new settings to add */
-	_changeDateEntry: function(input, options) {
+	   @param  input  (element) input field to change
+	   @param  name   (object) new settings to add or
+	                  (string) the option name
+	   @param  value  (any, optional) the option value */
+	_changeDateEntry: function(input, name, value) {
 		var inst = $.data(input, PROP_NAME);
 		if (inst) {
-			var currentDate = this._extractDate(inst);
+			var options = name;
+			if (typeof name == 'string') {
+				options = {};
+				options[name] = value;
+			}
+			var currentDate = this._extractDate(inst.input.val(), inst);
 			extendRemove(inst.options, options || {});
 			if (currentDate) {
 				this._setDate(inst, currentDate);
@@ -217,7 +224,7 @@ $.extend(DateEntry.prototype, {
 	   @return  (Date) current date or null if none */
 	_getDateDateEntry: function(input) {
 		var inst = $.data(input, PROP_NAME);
-		return (inst ? this._extractDate(inst) : null);
+		return (inst ? this._extractDate(inst.input.val(), inst) : null);
 	},
 
 	/* Initialise date entry.
@@ -600,10 +607,9 @@ $.extend(DateEntry.prototype, {
 	/* Extract the date value from the input field, or default to now.
 	   @param  inst  (object) the instance settings */
 	_parseDate: function(inst) {
-		var currentDate = this._extractDate(inst) || this._normaliseDate(
-			this._determineDate(this._get(inst, 'defaultDate')) ||
+		var currentDate = this._extractDate(inst.input.val(), inst) ||
+			this._normaliseDate(this._determineDate(this._get(inst, 'defaultDate'), inst) ||
 			this._daylightSavingAdjust(new Date()));
-		var dateFormat = this._get(inst, 'dateFormat');
 		inst._selectedYear = currentDate.getFullYear();
 		inst._selectedMonth = currentDate.getMonth();
 		inst._selectedDay = currentDate.getDate();
@@ -614,13 +620,14 @@ $.extend(DateEntry.prototype, {
 		}
 	},
 
-	/* Extract the date value from the input field.
-	   @param  inst  (object) the instance settings
+	/* Extract the date value from a string.
+	   @param  value  (string) the date text
+	   @param  inst   (object) the instance settings
 	   @return  (Date) the retrieved date or null if no value */
-	_extractDate: function(inst) {
-		var value = inst.input.val();
+	_extractDate: function(value, inst) {
 		var dateFormat = this._get(inst, 'dateFormat');
-		var values = value.split(dateFormat.charAt(3));
+		var values = value.split(
+			new RegExp('[\\' + dateFormat.substring(3).split('').join('\\') + ']'));
 		var year = 0;
 		var month = 0;
 		var day = 0;
@@ -630,6 +637,9 @@ $.extend(DateEntry.prototype, {
 			var field = dateFormat.charAt(i);
 			switch (field) {
 				case 'y': year = num; break;
+				case 'Y':
+					year = (num % 100) + (new Date().getFullYear() - new Date().getFullYear() % 100);
+					break;
 				case 'm': month = num; break;
 				case 'n': case 'N': 
 					month = $.inArray(values[i], this._get(inst,
@@ -663,6 +673,9 @@ $.extend(DateEntry.prototype, {
 			switch (field) {
 				case 'y':
 					currentDate += this._formatNumber(inst._selectedYear);
+					break;
+				case 'Y':
+					currentDate += this._formatNumber(inst._selectedYear % 100);
 					break;
 				case 'm':
 					currentDate += this._formatNumber(inst._selectedMonth + 1);
@@ -773,7 +786,7 @@ $.extend(DateEntry.prototype, {
 			offset = 0;
 		}
 		var field = this._get(inst, 'dateFormat').charAt(inst._field);
-		var year = inst._selectedYear + (field == 'y' ? offset : 0);
+		var year = inst._selectedYear + (field == 'y' || field == 'Y' ? offset : 0);
 		var month = inst._selectedMonth +
 			(field == 'm' || field == 'n' || field == 'N' ? offset : 0);
 		var day = (field == 'd' || field == 'w' || field == 'W' ?
@@ -797,10 +810,10 @@ $.extend(DateEntry.prototype, {
 					 (string) units and periods of offsets from now */
 	_setDate: function(inst, date) {
 		// Normalise to base time
-		date = this._normaliseDate(this._determineDate(
-			date || this._get(inst, 'defaultDate')) || this._daylightSavingAdjust(new Date()));
-		var minDate = this._normaliseDate(this._determineDate(this._get(inst, 'minDate')));
-		var maxDate = this._normaliseDate(this._determineDate(this._get(inst, 'maxDate')));
+		date = this._normaliseDate(this._determineDate(date || this._get(inst, 'defaultDate'), inst) ||
+			this._daylightSavingAdjust(new Date()));
+		var minDate = this._normaliseDate(this._determineDate(this._get(inst, 'minDate'), inst));
+		var maxDate = this._normaliseDate(this._determineDate(this._get(inst, 'maxDate'), inst));
 		// Ensure it is within the bounds set
 		date = (minDate && date < minDate ? minDate :
 			(maxDate && date > maxDate ? maxDate : date));
@@ -813,18 +826,24 @@ $.extend(DateEntry.prototype, {
 
 	/* A date may be specified as an exact value or a relative one.
 	   @param  setting  (Date) an actual date or
+	                    (string) date in current format
 	                    (number) offset in days from now or
 	                    (string) units and periods of offsets from now
+	   @param  inst     (object) the instance settings
 	   @return  (Date) the calculated date */
-	_determineDate: function(setting) {
+	_determineDate: function(setting, inst) {
 		var offsetNumeric = function(offset) { // E.g. +300, -2
 			var date = new Date();
 			date.setDate(date.getDate() + offset);
 			return date;
 		};
 		var offsetString = function(offset) { // E.g. '+2m', '-4h', '+3h +30m'
+			var date = $.dateEntry._extractDate(offset, inst);
+			if (date) {
+				return date;
+			}
 			offset = offset.toLowerCase();
-			var date = new Date();
+			date = new Date();
 			var year = date.getFullYear();
 			var month = date.getMonth();
 			var day = date.getDate();
@@ -880,14 +899,14 @@ $.extend(DateEntry.prototype, {
 	   @param  chr   (ch) the new character */
 	_handleKeyPress: function(inst, chr) {
 		var dateFormat = this._get(inst, 'dateFormat');
-		if (chr == dateFormat.charAt(3)) {
+		if (dateFormat.substring(3).indexOf(chr) > -1) {
 			this._changeField(inst, +1, false);
 		}
 		else if (chr >= '0' && chr <= '9') { // Allow direct entry of date
 			var field = dateFormat.charAt(inst._field);
 			var key = parseInt(chr, 10);
-			var value = parseInt(inst._lastChr + chr, 10);
-			var year = (field != 'y' ? inst._selectedYear : value);
+			var value = parseInt((inst._lastChr || '') + chr, 10);
+			var year = (field != 'y' && field != 'Y' ? inst._selectedYear : value);
 			var month = (field != 'm' && field != 'n' && field != 'N' ?
 				inst._selectedMonth + 1 : (value >= 1 && value <= 12 ? value :
 				(key > 0 ? key : inst._selectedMonth + 1)));
