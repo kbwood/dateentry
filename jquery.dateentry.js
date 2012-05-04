@@ -1,5 +1,5 @@
 /* http://keith-wood.name/dateEntry.html
-   Time entry for jQuery v1.0.2.
+   Date entry for jQuery v1.0.3.
    Written by Keith Wood (kbwood{at}iinet.com.au) March 2009.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -42,7 +42,7 @@ function DateEntry() {
 	};
 	this._defaults = {
 		appendText: '', // Display text following the input box, e.g. showing the format
-		initialField: 0, // The field to highlight initially, 0 = hours, 1 = minutes, ...
+		initialField: 0, // The field to highlight initially
 		useMouseWheel: true, // True to use mouse wheel for increment/decrement if possible,
 			// false to never use it
 		defaultDate: null, // The date to use if none has been set, leave at null for now
@@ -203,7 +203,7 @@ $.extend(DateEntry.prototype, {
 
 	/* Initialise the current date for a date entry input field.
 	   @param  input  (element) input field to update
-	   @param  time   (Date) the new date or null for now */
+	   @param  date   (Date) the new date or null for now */
 	_setDateDateEntry: function(input, date) {
 		var inst = $.data(input, PROP_NAME);
 		if (inst) {
@@ -361,7 +361,7 @@ $.extend(DateEntry.prototype, {
 		event.preventDefault();
 	},
 
-	/* Expand the spinner, is possible, to make it easier to use.
+	/* Expand the spinner, if possible, to make it easier to use.
 	   @param  event  (event) the mouse over event */
 	_expandSpinner: function(event) {
 		var spinner = $.dateEntry._getSpinnerTarget(event);
@@ -385,8 +385,8 @@ $.extend(DateEntry.prototype, {
 				(offset.left - (spinnerBigSize[0] - spinnerSize[0]) / 2 -
 				(relative ? relative.left : 0)) + 'px; top: ' + (offset.top -
 				(spinnerBigSize[1] - spinnerSize[1]) / 2 - (relative ? relative.top : 0)) +
-				'px; width: ' + spinnerBigSize[0] +
-				'px; height: ' + spinnerBigSize[1] + 'px; background: #fff url(' +
+				'px; width: ' + spinnerBigSize[0] + 'px; height: ' +
+				spinnerBigSize[1] + 'px; background: transparent url(' +
 				spinnerBigImage + ') no-repeat 0px 0px; z-index: 10;"></div>').
 				mousedown($.dateEntry._handleSpinner).mouseup($.dateEntry._endSpinner).
 				mouseout($.dateEntry._endExpand).mousemove($.dateEntry._describeSpinner).
@@ -810,7 +810,7 @@ $.extend(DateEntry.prototype, {
 
 	/* A date may be specified as an exact value or a relative one.
 	   @param  setting  (Date) an actual date or
-	                    (number) offset in seconds from now or
+	                    (number) offset in days from now or
 	                    (string) units and periods of offsets from now
 	   @return  (Date) the calculated date */
 	_determineDate: function(setting) {
@@ -847,7 +847,7 @@ $.extend(DateEntry.prototype, {
 	},
 
 	/* Normalise date object to a common time.
-	   @param  date  (Date) the original time
+	   @param  date  (Date) the original date
 	   @return  (Date) the normalised date */
 	_normaliseDate: function(date) {
 		if (!date) {
@@ -870,12 +870,16 @@ $.extend(DateEntry.prototype, {
 		}
 		else if (chr >= '0' && chr <= '9') { // Allow direct entry of date
 			var field = dateFormat.charAt(inst._field);
+			var key = parseInt(chr, 10);
 			var value = parseInt(inst._lastChr + chr, 10);
-			var year = (field == 'y' ? value : inst._selectedYear);
-			var month = ((field == 'm' || field == 'n' || field == 'N') &&
-				value >= 1 && value <= 12 ? value : inst._selectedMonth + 1);
-			var day = ((field == 'd' || field == 'w' || field == 'W') && value >= 1 &&
-				value <= this._getDaysInMonth(year, month - 1) ? value : inst._selectedDay);
+			var year = (field != 'y' ? inst._selectedYear : value);
+			var month = (field != 'm' && field != 'n' && field != 'N' ?
+				inst._selectedMonth + 1 : (value >= 1 && value <= 12 ? value :
+				(key > 0 ? key : inst._selectedMonth + 1)));
+			var day = (field != 'd' && field != 'w' && field != 'W' ?
+				inst._selectedDay : (value >= 1 &&
+				value <= this._getDaysInMonth(year, month - 1) ? value :
+				(key > 0 ? key : inst._selectedDay)));
 			this._setDate(inst, new Date(year, month - 1, day));
 			inst._lastChr = (field != 'y' ? '' :
 				inst._lastChr.substr(Math.max(0, inst._lastChr.length - 2))) + chr;
@@ -921,7 +925,7 @@ $.fn.dateEntry = function(options) {
 	});
 };
 
-/* Initialise the time entry functionality. */
+/* Initialise the date entry functionality. */
 $.dateEntry = new DateEntry(); // Singleton instance
 
 })(jQuery);

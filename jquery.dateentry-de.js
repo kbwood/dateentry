@@ -2,7 +2,7 @@
    German initialisation for the jQuery date entry extension
    Written by Eyk Schulz (eyk.schulz@gmx.net) and Milian Wolff (mail@milianw.de) */
 (function($) {
-	$.dateEntry.regional['de'] = {dateFiormat: 'dmy.',
+	$.dateEntry.regional['de'] = {dateFormat: 'dmy.',
 		monthNames: ['Januar','Februar','März','April','Mai','Juni',
 		'Juli','August','September','Oktober','November','Dezember'],
 		monthNamesShort: ['Jan','Feb','Mär','Apr','Mai','Jun',
