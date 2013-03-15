@@ -1,0 +1,38 @@
+{
+	"name": "kbw.dateentry",
+	"title": "jQuery Date Entry",
+	"description": "This plugin sets an input field up to accept a date value using a spinner or the keyboard. * Set date format, including day and/or month names. * Integrates with mousewheel plugin. * Expandable spinner for easier use. * 20 localisations.",
+	"keywords": [
+		"date",
+		"i18n",
+		"input",
+		"mousewheel",
+		"spinner",
+		"ui"
+	],
+	"version": "1.1.1",
+	"author": {
+		"name": "Keith Wood",
+		"url": "http://keith-wood.name/"
+	},
+	"maintainers": [
+		{
+			"name": "Keith Wood",
+			"email": "kbwood@iinet.com.au",
+			"url": "http://keith-wood.name/"
+		}
+	],
+	"licenses": [
+		{
+			"type": "MIT",
+			"url": "https://github.com/jquery/jquery/blob/master/MIT-LICENSE.txt"
+		}
+	],
+	"bugs": "https://github.com/kbwood/dateEntry/issues",
+	"homepage": "http://keith-wood.name/dateEntry.html",
+	"docs": "http://keith-wood.name/dateEntryRef.html",
+	"download": "http://keith-wood.name/dateEntry.html",
+	"dependencies": {
+		"jquery": ">=1.4"
+	}
+}

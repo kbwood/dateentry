@@ -1,8 +1,7 @@
 /* http://keith-wood.name/dateEntry.html
-   Date entry for jQuery v1.0.6.
+   Date entry for jQuery v1.1.1.
    Written by Keith Wood (kbwood{at}iinet.com.au) March 2009.
-   Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
-   MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
+   Licensed under the MIT (https://github.com/jquery/jquery/blob/master/MIT-LICENSE.txt) license.
    Please attribute the author if you use it. */
 
 /* Turn an input field into an entry point for a date value.
@@ -67,64 +66,96 @@ function DateEntry() {
 	$.extend(this._defaults, this.regional['']);
 }
 
-var PROP_NAME = 'dateEntry';
-
 $.extend(DateEntry.prototype, {
 	/* Class name added to elements to indicate already configured with date entry. */
 	markerClassName: 'hasDateEntry',
+	/* Name of the data property for instance settings. */
+	propertyName: 'dateEntry',
+
+	/* Class name for the appended content. */
+	_appendClass: 'dateEntry_append',
+	/* Class name for the date entry control. */
+	_controlClass: 'dateEntry_control',
+	/* Class name for the expanded spinner. */
+	_expandClass: 'dateEntry_expand',
 
 	/* Override the default settings for all instances of the date entry.
 	   @param  options  (object) the new settings to use as defaults (anonymous object)
 	   @return  (DateEntry) this object */
 	setDefaults: function(options) {
-		extendRemove(this._defaults, options || {});
+		$.extend(this._defaults, options || {});
 		return this;
 	},
 
 	/* Attach the date entry handler to an input field.
 	   @param  target   (element) the field to attach to
 	   @param  options  (object) custom settings for this instance */
-	_connectDateEntry: function(target, options) {
+	_attachPlugin: function(target, options) {
 		var input = $(target);
 		if (input.hasClass(this.markerClassName)) {
 			return;
 		}
-		var inst = {};
-		inst.options = $.extend({}, options);
-		inst._selectedYear = 0; // The currently selected year
-		inst._selectedMonth = 0; // The currently selected month
-		inst._selectedDay = 0; // The currently selected day
-		inst._field = 0; // The selected subfield
-		inst.input = $(target); // The attached input field
-		$.data(target, PROP_NAME, inst);
-		var spinnerImage = this._get(inst, 'spinnerImage');
-		var spinnerText = this._get(inst, 'spinnerText');
-		var spinnerSize = this._get(inst, 'spinnerSize');
-		var appendText = this._get(inst, 'appendText');
-		var spinner = (!spinnerImage ? null : 
-			$('<span class="dateEntry_control" style="display: inline-block; ' +
-			'background: url(\'' + spinnerImage + '\') 0 0 no-repeat; ' +
-			'width: ' + spinnerSize[0] + 'px; height: ' + spinnerSize[1] + 'px;' +
-			($.browser.mozilla && $.browser.version < '1.9' ? // FF 2- (Win)
-			' padding-left: ' + spinnerSize[0] + 'px; padding-bottom: ' +
-			(spinnerSize[1] - 18) + 'px;' : '') + '"></span>'));
-		input.wrap('<span class="dateEntry_wrap"></span>').
-			after(appendText ? '<span class="dateEntry_append">' + appendText + '</span>' : '').
-			after(spinner || '');
-		input.addClass(this.markerClassName).bind('focus.dateEntry', this._doFocus).
-			bind('blur.dateEntry', this._doBlur).bind('click.dateEntry', this._doClick).
-			bind('keydown.dateEntry', this._doKeyDown).bind('keypress.dateEntry', this._doKeyPress);
-		// Check pastes
-		if ($.browser.mozilla) {
-			input.bind('input.dateEntry', function(event) { $.dateEntry._parseDate(inst); });
+		var inst = {options: $.extend({}, this._defaults, options), input: input,
+			_field: 0, _selectedYear: 0, _selectedMonth: 0, _selectedDay: 0};
+		input.data(this.propertyName, inst).addClass(this.markerClassName).
+			bind('focus.' + this.propertyName, this._doFocus).
+			bind('blur.' + this.propertyName, this._doBlur).
+			bind('click.' + this.propertyName, this._doClick).
+			bind('keydown.' + this.propertyName, this._doKeyDown).
+			bind('keypress.' + this.propertyName, this._doKeyPress).
+			bind('paste.' + this.propertyName, function(event) { // Check pastes
+				setTimeout(function() { plugin._parseDate(inst); }, 1);
+			});
+		this._optionPlugin(target, options);
+	},
+
+	/* Retrieve or reconfigure the settings for a date entry control.
+	   @param  target   (element) the control to affect
+	   @param  options  (object) the new options for this instance or
+	                    (string) an individual property name
+	   @param  value    (any) the individual property value (omit if options
+	                    is an object or to retrieve the value of a setting)
+	   @return  (any) if retrieving a value */
+	_optionPlugin: function(target, options, value) {
+		target = $(target);
+		var inst = target.data(this.propertyName);
+		if (!options || (typeof options == 'string' && value == null)) { // Get option
+			var name = options;
+			options = (inst || {}).options;
+			return (options && name ? options[name] : options);
 		}
-		if ($.browser.msie) {
-			input.bind('paste.dateEntry', 
-				function(event) { setTimeout(function() { $.dateEntry._parseDate(inst); }, 1); });
+
+		if (!target.hasClass(this.markerClassName)) {
+			return;
 		}
+		options = options || {};
+		if (typeof options == 'string') {
+			var name = options;
+			options = {};
+			options[name] = value;
+		}
+		var currentDate = this._extractDate(target.val(), inst);
+		$.extend(inst.options, options);
+		inst._field = 0;
+		if (currentDate) {
+			this._setDate(inst, currentDate);
+		}
+		// Remove stuff dependent on old settings
+		target.next('span.' + this._appendClass).remove();
+		target.parent().find('span.' + this._controlClass).remove();
+		if ($.fn.mousewheel) {
+			target.unmousewheel();
+		}
+		// And re-add if requested
+		var spinner = (!inst.options.spinnerImage ? null :
+			$('<span class="' + this._controlClass + '" style="display: inline-block; ' +
+			'background: url(\'' + inst.options.spinnerImage + '\') 0 0 no-repeat; width: ' + 
+			inst.options.spinnerSize[0] + 'px; height: ' + inst.options.spinnerSize[1] + 'px;"></span>'));
+		target.after(inst.options.appendText ? '<span class="' + this._appendClass + '">' +
+			inst.options.appendText + '</span>' : '').after(spinner || '');
 		// Allow mouse wheel usage
-		if (this._get(inst, 'useMouseWheel') && $.fn.mousewheel) {
-			input.mousewheel(this._doMouseWheel);
+		if (inst.options.useMouseWheel && $.fn.mousewheel) {
+			target.mousewheel(this._doMouseWheel);
 		}
 		if (spinner) {
 			spinner.mousedown(this._handleSpinner).mouseup(this._endSpinner).
@@ -134,103 +165,81 @@ $.extend(DateEntry.prototype, {
 	},
 
 	/* Enable a date entry input and any associated spinner.
-	   @param  input  (element) single input field */
-	_enableDateEntry: function(input) {
-		this._enableDisable(input, false);
+	   @param  target  (element) single input field */
+	_enablePlugin: function(target) {
+		this._enableDisable(target, false);
 	},
 
 	/* Disable a date entry input and any associated spinner.
-	   @param  input  (element) single input field */
-	_disableDateEntry: function(input) {
-		this._enableDisable(input, true);
+	   @param  target  (element) single input field */
+	_disablePlugin: function(target) {
+		this._enableDisable(target, true);
 	},
 
 	/* Enable or disable a date entry input and any associated spinner.
-	   @param  input    (element) single input field
+	   @param  target   (element) single input field
 	   @param  disable  (boolean) true to disable, false to enable */
-	_enableDisable: function(input, disable) {
-		var inst = $.data(input, PROP_NAME);
+	_enableDisable: function(target, disable) {
+		var inst = $.data(target, this.propertyName);
 		if (!inst) {
 			return;
 		}
-		input.disabled = disable;
-		if (input.nextSibling && input.nextSibling.nodeName.toLowerCase() == 'span') {
-			$.dateEntry._changeSpinner(inst, input.nextSibling, (disable ? 5 : -1));
+		target.disabled = disable;
+		if (target.nextSibling && target.nextSibling.nodeName.toLowerCase() == 'span') {
+			plugin._changeSpinner(inst, target.nextSibling, (disable ? 5 : -1));
 		}
-		$.dateEntry._disabledInputs = $.map($.dateEntry._disabledInputs,
-			function(value) { return (value == input ? null : value); }); // Delete entry
+		plugin._disabledInputs = $.map(plugin._disabledInputs,
+			function(value) { return (value == target ? null : value); }); // Delete entry
 		if (disable) {
-			$.dateEntry._disabledInputs.push(input);
+			plugin._disabledInputs.push(target);
 		}
 	},
 
 	/* Check whether an input field has been disabled.
-	   @param  input  (element) input field to check
+	   @param  target  (element) input field to check
 	   @return  (boolean) true if this field has been disabled, false if it is enabled */
-	_isDisabledDateEntry: function(input) {
-		return $.inArray(input, this._disabledInputs) > -1;
-	},
-
-	/* Reconfigure the settings for a date entry field.
-	   @param  input  (element) input field to change
-	   @param  name   (object) new settings to add or
-	                  (string) the option name
-	   @param  value  (any, optional) the option value */
-	_changeDateEntry: function(input, name, value) {
-		var inst = $.data(input, PROP_NAME);
-		if (inst) {
-			var options = name;
-			if (typeof name == 'string') {
-				options = {};
-				options[name] = value;
-			}
-			var currentDate = this._extractDate(inst.input.val(), inst);
-			extendRemove(inst.options, options || {});
-			if (currentDate) {
-				this._setDate(inst, currentDate);
-			}
-		}
-		$.data(input, PROP_NAME, inst);
+	_isDisabledPlugin: function(target) {
+		return $.inArray(target, this._disabledInputs) > -1;
 	},
 
 	/* Remove the date entry functionality from an input.
-	   @param  input  (element) input field to affect */
-	_destroyDateEntry: function(input) {
-		$input = $(input);
-		if (!$input.hasClass(this.markerClassName)) {
+	   @param  target  (element) the control to affect */
+	_destroyPlugin: function(target) {
+		target = $(target);
+		if (!target.hasClass(this.markerClassName)) {
 			return;
 		}
-		$input.removeClass(this.markerClassName).unbind('.dateEntry');
+		target.removeClass(this.markerClassName).removeData(this.propertyName).
+			unbind('.' + this.propertyName);
 		if ($.fn.mousewheel) {
-			$input.unmousewheel();
+			target.unmousewheel();
 		}
 		this._disabledInputs = $.map(this._disabledInputs,
-			function(value) { return (value == input ? null : value); }); // Delete entry
-		$input.parent().replaceWith($input);
-		$.removeData(input, PROP_NAME);
+			function(value) { return (value == target[0] ? null : value); }); // Delete entry
+		target.siblings('.' + this._appendClass + ',.' + this._controlClass).remove();
 	},
 
 	/* Initialise the current date for a date entry input field.
-	   @param  input  (element) input field to update
-	   @param  date   (Date) the new date or null for now */
-	_setDateDateEntry: function(input, date) {
-		var inst = $.data(input, PROP_NAME);
+	   @param  target  (element) input field to update
+	   @param  date    (Date) the new date or null for now */
+	_setDatePlugin: function(target, date) {
+		var inst = $.data(target, this.propertyName);
 		if (inst) {
 			if (date === null || date === '') {
 				inst.input.val('');
 			}
 			else {
-				this._setDate(inst,
-					date ? (typeof date == 'object' ? new Date(date.getTime()) : date) : null);
+				this._setDate(inst, date ? (typeof date == 'object' ?
+					new Date(date.getTime()) : date) : null);
 			}
 		}
 	},
 
 	/* Retrieve the current date for a date entry input field.
-	   @param  input  (element) input field to update
+	   @param  target  (element) input field to update
 	   @return  (Date) current date or null if none */
-	_getDateDateEntry: function(input) {
-		var inst = $.data(input, PROP_NAME);
+	_getDatePlugin: function(target) {
+		var inst = $.data(target, this.propertyName);
 		return (inst ? this._extractDate(inst.input.val(), inst) : null);
 	},
 
@@ -239,40 +248,38 @@ $.extend(DateEntry.prototype, {
 	                   (event) the focus event */
 	_doFocus: function(target) {
 		var input = (target.nodeName && target.nodeName.toLowerCase() == 'input' ? target : this);
-		if ($.dateEntry._lastInput == input || $.dateEntry._isDisabledDateEntry(input)) {
-			$.dateEntry._focussed = false;
+		if (plugin._lastInput == input || plugin._isDisabledPlugin(input)) {
+			plugin._focussed = false;
 			return;
 		}
-		var inst = $.data(input, PROP_NAME);
-		$.dateEntry._focussed = true;
-		$.dateEntry._lastInput = input;
-		$.dateEntry._blurredInput = null;
-		var beforeShow = $.dateEntry._get(inst, 'beforeShow');
-		extendRemove(inst.options, (beforeShow ? beforeShow.apply(input, [input]) : {}));
-		$.data(input, PROP_NAME, inst);
-		$.dateEntry._parseDate(inst);
-		setTimeout(function() { $.dateEntry._showField(inst); }, 10);
+		var inst = $.data(input, plugin.propertyName);
+		plugin._focussed = true;
+		plugin._lastInput = input;
+		plugin._blurredInput = null;
+		$.extend(inst.options, ($.isFunction(inst.options.beforeShow) ?
+			inst.options.beforeShow.apply(input, [input]) : {}));
+		plugin._parseDate(inst);
+		setTimeout(function() { plugin._showField(inst); }, 10);
 	},
 
 	/* Note that the field has been exited.
 	   @param  event  (event) the blur event */
 	_doBlur: function(event) {
-		$.dateEntry._blurredInput = $.dateEntry._lastInput;
-		$.dateEntry._lastInput = null;
+		plugin._blurredInput = plugin._lastInput;
+		plugin._lastInput = null;
 	},
 
 	/* Select appropriate field portion on click, if already in the field.
 	   @param  event  (event) the click event */
 	_doClick: function(event) {
 		var input = event.target;
-		var inst = $.data(input, PROP_NAME);
-		if (!$.dateEntry._focussed) {
-			var dateFormat = $.dateEntry._get(inst, 'dateFormat');
+		var inst = $.data(input, plugin.propertyName);
+		if (!plugin._focussed) {
 			inst._field = 0;
 			if (input.selectionStart != null) { // Use input select range
 				var end = 0;
 				for (var field = 0; field < 3; field++) {
-					end += $.dateEntry._fieldLength(inst, field, dateFormat) + 1;
+					end += plugin._fieldLength(inst, field, inst.options.dateFormat) + 1;
 					inst._field = field;
 					if (input.selectionStart < end) {
 						break;
@@ -290,7 +297,7 @@ $.extend(DateEntry.prototype, {
 					range.offsetLeft; // Position - left edge - alignment
 				var end = 0;
 				for (var field = 0; field < 3; field++) {
-					end += $.dateEntry._fieldLength(inst, field, dateFormat) + 1;
+					end += plugin._fieldLength(inst, field, inst.options.dateFormat) + 1;
 					range.collapse();
 					range.moveEnd('character', end);
 					inst._field = field;
@@ -300,9 +307,8 @@ $.extend(DateEntry.prototype, {
 				}
 			}
 		}
-		$.data(input, PROP_NAME, inst);
-		$.dateEntry._showField(inst);
-		$.dateEntry._focussed = false;
+		plugin._showField(inst);
+		plugin._focussed = false;
 	},
 
 	/* Handle keystrokes in the field.
@@ -312,34 +318,35 @@ $.extend(DateEntry.prototype, {
 		if (event.keyCode >= 48) { // >= '0'
 			return true;
 		}
-		var inst = $.data(event.target, PROP_NAME);
+		var inst = $.data(event.target, plugin.propertyName);
 		switch (event.keyCode) {
 			case 9: return (event.shiftKey ?
 						// Move to previous date field, or out if at the beginning
-						$.dateEntry._changeField(inst, -1, true) :
+						plugin._changeField(inst, -1, true) :
 						// Move to next date field, or out if at the end
-						$.dateEntry._changeField(inst, +1, true));
+						plugin._changeField(inst, +1, true));
 			case 35: if (event.ctrlKey) { // Clear date on ctrl+end
-						$.dateEntry._setValue(inst, '');
+						plugin._setValue(inst, '');
 					}
 					else { // Last field on end
 						inst._field = 2;
-						$.dateEntry._adjustField(inst, 0);
+						plugin._adjustField(inst, 0);
 					}
 					break;
 			case 36: if (event.ctrlKey) { // Current date on ctrl+home
-						$.dateEntry._setDate(inst);
+						plugin._setDate(inst);
 					}
 					else { // First field on home
 						inst._field = 0;
-						$.dateEntry._adjustField(inst, 0);
+						plugin._adjustField(inst, 0);
 					}
 					break;
-			case 37: $.dateEntry._changeField(inst, -1, false); break; // Previous field on left
-			case 38: $.dateEntry._adjustField(inst, +1); break; // Increment date field on up
-			case 39: $.dateEntry._changeField(inst, +1, false); break; // Next field on right
-			case 40: $.dateEntry._adjustField(inst, -1); break; // Decrement date field on down
-			case 46: $.dateEntry._setValue(inst, ''); break; // Clear date on delete
+			case 37: plugin._changeField(inst, -1, false); break; // Previous field on left
+			case 38: plugin._adjustField(inst, +1); break; // Increment date field on up
+			case 39: plugin._changeField(inst, +1, false); break; // Next field on right
+			case 40: plugin._adjustField(inst, -1); break; // Decrement date field on down
+			case 46: plugin._setValue(inst, ''); break; // Clear date on delete
+			default: return true;
 		}
 		return false;
 	},
@@ -352,8 +359,8 @@ $.extend(DateEntry.prototype, {
 		if (chr < ' ') {
 			return true;
 		}
-		var inst = $.data(event.target, PROP_NAME);
-		$.dateEntry._handleKeyPress(inst, chr);
+		var inst = $.data(event.target, plugin.propertyName);
+		plugin._handleKeyPress(inst, chr);
 		return false;
 	},
 
@@ -361,30 +368,27 @@ $.extend(DateEntry.prototype, {
 	   @param  event  (event) the mouse wheel event
 	   @param  delta  (number) the amount of change */
 	_doMouseWheel: function(event, delta) {
-		if ($.dateEntry._isDisabledDateEntry(event.target)) {
+		if (plugin._isDisabledPlugin(event.target)) {
 			return;
 		}
-		delta = ($.browser.opera ? -delta / Math.abs(delta) :
-			($.browser.safari ? delta / Math.abs(delta) : delta));
-		var inst = $.data(event.target, PROP_NAME);
+		var inst = $.data(event.target, plugin.propertyName);
 		inst.input.focus();
 		if (!inst.input.val()) {
-			$.dateEntry._parseDate(inst);
+			plugin._parseDate(inst);
 		}
-		$.dateEntry._adjustField(inst, delta);
+		plugin._adjustField(inst, delta);
 		event.preventDefault();
 	},
 
 	/* Expand the spinner, if possible, to make it easier to use.
 	   @param  event  (event) the mouse over event */
 	_expandSpinner: function(event) {
-		var spinner = $.dateEntry._getSpinnerTarget(event);
-		var inst = $.data($.dateEntry._getInput(spinner), PROP_NAME);
-		if ($.dateEntry._isDisabledDateEntry(inst.input[0])) {
+		var spinner = plugin._getSpinnerTarget(event);
+		var inst = $.data(plugin._getInput(spinner), plugin.propertyName);
+		if (plugin._isDisabledPlugin(inst.input[0])) {
 			return;
 		}
-		var spinnerBigImage = $.dateEntry._get(inst, 'spinnerBigImage');
-		if (spinnerBigImage) {
+		if (inst.options.spinnerBigImage) {
 			inst._expanded = true;
 			var offset = $(spinner).offset();
 			var relative = null;
@@ -396,17 +400,16 @@ $.extend(DateEntry.prototype, {
 				}
 				return !relative;
 			});
-			var spinnerSize = $.dateEntry._get(inst, 'spinnerSize');
-			var spinnerBigSize = $.dateEntry._get(inst, 'spinnerBigSize');
-			$('<div class="dateEntry_expand" style="position: absolute; left: ' +
-				(offset.left - (spinnerBigSize[0] - spinnerSize[0]) / 2 -
-				(relative ? relative.left : 0)) + 'px; top: ' + (offset.top -
-				(spinnerBigSize[1] - spinnerSize[1]) / 2 - (relative ? relative.top : 0)) +
-				'px; width: ' + spinnerBigSize[0] + 'px; height: ' +
-				spinnerBigSize[1] + 'px; background: transparent url(' +
-				spinnerBigImage + ') no-repeat 0px 0px; z-index: 10;"></div>').
-				mousedown($.dateEntry._handleSpinner).mouseup($.dateEntry._endSpinner).
-				mouseout($.dateEntry._endExpand).mousemove($.dateEntry._describeSpinner).
+			$('<div class="' + plugin._expandClass + '" style="position: absolute; left: ' +
+				(offset.left - (inst.options.spinnerBigSize[0] - inst.options.spinnerSize[0]) / 2 -
+				(relative ? relative.left : 0)) + 'px; top: ' +
+				(offset.top - (inst.options.spinnerBigSize[1] - inst.options.spinnerSize[1]) / 2 -
+				(relative ? relative.top : 0)) + 'px; width: ' +
+				inst.options.spinnerBigSize[0] + 'px; height: ' +
+				inst.options.spinnerBigSize[1] + 'px; background: transparent url(' +
+				inst.options.spinnerBigImage + ') no-repeat 0px 0px; z-index: 10;"></div>').
+				mousedown(plugin._handleSpinner).mouseup(plugin._endSpinner).
+				mouseout(plugin._endExpand).mousemove(plugin._describeSpinner).
 				insertAfter(spinner);
 		}
 	},
@@ -415,44 +418,42 @@ $.extend(DateEntry.prototype, {
 	   @param  spinner  (element) the current spinner
 	   @return  (element) the corresponding input */
 	_getInput: function(spinner) {
-		return $(spinner).siblings('.' + $.dateEntry.markerClassName)[0];
+		return $(spinner).siblings('.' + plugin.markerClassName)[0];
 	},
 
 	/* Change the title based on position within the spinner.
 	   @param  event  (event) the mouse move event */
 	_describeSpinner: function(event) {
-		var spinner = $.dateEntry._getSpinnerTarget(event);
-		var inst = $.data($.dateEntry._getInput(spinner), PROP_NAME);
-		spinner.title = $.dateEntry._get(inst, 'spinnerTexts')
-			[$.dateEntry._getSpinnerRegion(inst, event)];
+		var spinner = plugin._getSpinnerTarget(event);
+		var inst = $.data(plugin._getInput(spinner), plugin.propertyName);
+		spinner.title = inst.options.spinnerTexts[plugin._getSpinnerRegion(inst, event)];
 	},
 
 	/* Handle a click on the spinner.
 	   @param  event  (event) the mouse click event */
 	_handleSpinner: function(event) {
-		var spinner = $.dateEntry._getSpinnerTarget(event);
-		var input = $.dateEntry._getInput(spinner);
-		if ($.dateEntry._isDisabledDateEntry(input)) {
+		var spinner = plugin._getSpinnerTarget(event);
+		var input = plugin._getInput(spinner);
+		if (plugin._isDisabledPlugin(input)) {
 			return;
 		}
-		if (input == $.dateEntry._blurredInput) {
-			$.dateEntry._lastInput = input;
-			$.dateEntry._blurredInput = null;
+		if (input == plugin._blurredInput) {
+			plugin._lastInput = input;
+			plugin._blurredInput = null;
 		}
-		var inst = $.data(input, PROP_NAME);
-		$.dateEntry._doFocus(input);
-		var region = $.dateEntry._getSpinnerRegion(inst, event);
-		$.dateEntry._changeSpinner(inst, spinner, region);
-		$.dateEntry._actionSpinner(inst, region);
-		$.dateEntry._timer = null;
-		$.dateEntry._handlingSpinner = true;
-		var spinnerRepeat = $.dateEntry._get(inst, 'spinnerRepeat');
-		if (region >= 3 && spinnerRepeat[0]) { // Repeat increment/decrement
-			$.dateEntry._timer = setTimeout(
-				function() { $.dateEntry._repeatSpinner(inst, region); },
-				spinnerRepeat[0]);
-			$(spinner).one('mouseout', $.dateEntry._releaseSpinner).
-				one('mouseup', $.dateEntry._releaseSpinner);
+		var inst = $.data(input, plugin.propertyName);
+		plugin._doFocus(input);
+		var region = plugin._getSpinnerRegion(inst, event);
+		plugin._changeSpinner(inst, spinner, region);
+		plugin._actionSpinner(inst, region);
+		plugin._timer = null;
+		plugin._handlingSpinner = true;
+		if (region >= 3 && inst.options.spinnerRepeat[0]) { // Repeat increment/decrement
+			plugin._timer = setTimeout(
+				function() { plugin._repeatSpinner(inst, region); },
+				inst.options.spinnerRepeat[0]);
+			$(spinner).one('mouseout', plugin._releaseSpinner).
+				one('mouseup', plugin._releaseSpinner);
 		}
 	},
 
@@ -461,7 +462,7 @@ $.extend(DateEntry.prototype, {
 	   @param  region  (number) the spinner "button" */
 	_actionSpinner: function(inst, region) {
 		if (!inst.input.val()) {
-			$.dateEntry._parseDate(inst);
+			plugin._parseDate(inst);
 		}
 		switch (region) {
 			case 0: this._setDate(inst); break;
@@ -476,30 +477,30 @@ $.extend(DateEntry.prototype, {
 	   @param  inst    (object) the instance settings
 	   @param  region  (number) the spinner "button" */
 	_repeatSpinner: function(inst, region) {
-		if (!$.dateEntry._timer) {
+		if (!plugin._timer) {
 			return;
 		}
-		$.dateEntry._lastInput = $.dateEntry._blurredInput;
+		plugin._lastInput = plugin._blurredInput;
 		this._actionSpinner(inst, region);
 		this._timer = setTimeout(
-			function() { $.dateEntry._repeatSpinner(inst, region); },
-			this._get(inst, 'spinnerRepeat')[1]);
+			function() { plugin._repeatSpinner(inst, region); },
+			inst.options.spinnerRepeat[1]);
 	},
 
 	/* Stop a spinner repeat.
 	   @param  event  (event) the mouse event */
 	_releaseSpinner: function(event) {
-		clearTimeout($.dateEntry._timer);
-		$.dateEntry._timer = null;
+		clearTimeout(plugin._timer);
+		plugin._timer = null;
 	},
 
 	/* Tidy up after an expanded spinner.
 	   @param  event  (event) the mouse event */
 	_endExpand: function(event) {
-		$.dateEntry._timer = null;
-		var spinner = $.dateEntry._getSpinnerTarget(event);
-		var input = $.dateEntry._getInput(spinner);
-		var inst = $.data(input, PROP_NAME);
+		plugin._timer = null;
+		var spinner = plugin._getSpinnerTarget(event);
+		var input = plugin._getInput(spinner);
+		var inst = $.data(input, plugin.propertyName);
 		$(spinner).remove();
 		inst._expanded = false;
 	},
@@ -507,20 +508,20 @@ $.extend(DateEntry.prototype, {
 	/* Tidy up after a spinner click.
 	   @param  event  (event) the mouse event */
 	_endSpinner: function(event) {
-		$.dateEntry._timer = null;
-		var spinner = $.dateEntry._getSpinnerTarget(event);
-		var input = $.dateEntry._getInput(spinner);
-		var inst = $.data(input, PROP_NAME);
-		if (!$.dateEntry._isDisabledDateEntry(input)) {
-			$.dateEntry._changeSpinner(inst, spinner, -1);
+		plugin._timer = null;
+		var spinner = plugin._getSpinnerTarget(event);
+		var input = plugin._getInput(spinner);
+		var inst = $.data(input, plugin.propertyName);
+		if (!plugin._isDisabledPlugin(input)) {
+			plugin._changeSpinner(inst, spinner, -1);
 		}
-		if ($.dateEntry._handlingSpinner) {
-			$.dateEntry._lastInput = $.dateEntry._blurredInput;
+		if (plugin._handlingSpinner) {
+			plugin._lastInput = plugin._blurredInput;
 		}
-		if ($.dateEntry._lastInput && $.dateEntry._handlingSpinner) {
-			$.dateEntry._showField(inst);
+		if (plugin._lastInput && plugin._handlingSpinner) {
+			plugin._showField(inst);
 		}
-		$.dateEntry._handlingSpinner = false;
+		plugin._handlingSpinner = false;
 	},
 
 	/* Retrieve the spinner from the event.
@@ -536,17 +537,13 @@ $.extend(DateEntry.prototype, {
 	   @return  (number) the spinner "button" number */
 	_getSpinnerRegion: function(inst, event) {
 		var spinner = this._getSpinnerTarget(event);
-		var pos = ($.browser.opera || $.browser.safari ?
-			$.dateEntry._findPos(spinner) : $(spinner).offset());
-		var scrolled = ($.browser.safari ? $.dateEntry._findScroll(spinner) :
-			[document.documentElement.scrollLeft || document.body.scrollLeft,
-			document.documentElement.scrollTop || document.body.scrollTop]);
-		var spinnerIncDecOnly = this._get(inst, 'spinnerIncDecOnly');
-		var left = (spinnerIncDecOnly ? 99 : event.clientX + scrolled[0] -
-			pos.left - ($.browser.msie ? 2 : 0));
-		var top = event.clientY + scrolled[1] - pos.top - ($.browser.msie ? 2 : 0);
-		var spinnerSize = this._get(inst, (inst._expanded ? 'spinnerBigSize' : 'spinnerSize'));
-		var right = (spinnerIncDecOnly ? 99 : spinnerSize[0] - 1 - left);
+		var pos = $(spinner).offset();
+		var scrolled = [document.documentElement.scrollLeft || document.body.scrollLeft,
+			document.documentElement.scrollTop || document.body.scrollTop];
+		var left = (inst.options.spinnerIncDecOnly ? 99 : event.clientX + scrolled[0] - pos.left);
+		var top = event.clientY + scrolled[1] - pos.top;
+		var spinnerSize = inst.options[inst._expanded ? 'spinnerBigSize' : 'spinnerSize'];
+		var right = (inst.options.spinnerIncDecOnly ? 99 : spinnerSize[0] - 1 - left);
 		var bottom = spinnerSize[1] - 1 - top;
 		if (spinnerSize[2] > 0 && Math.abs(left - right) <= spinnerSize[2] &&
 				Math.abs(top - bottom) <= spinnerSize[2]) {
@@ -562,68 +559,19 @@ $.extend(DateEntry.prototype, {
 	   @param  region   (number) the spinner "button" */
 	_changeSpinner: function(inst, spinner, region) {
 		$(spinner).css('background-position', '-' + ((region + 1) *
-			this._get(inst, (inst._expanded ? 'spinnerBigSize' : 'spinnerSize'))[0]) + 'px 0px');
-	},
-
-	/* Find an object's position on the screen.
-	   @param  obj  (element) the control
-	   @return  (object) position as .left and .top */
-	_findPos: function(obj) {
-		var curLeft = curTop = 0;
-		if (obj.offsetParent) {
-			curLeft = obj.offsetLeft;
-			curTop = obj.offsetTop;
-			while (obj = obj.offsetParent) {
-				var origCurLeft = curLeft;
-				curLeft += obj.offsetLeft;
-				if (curLeft < 0) {
-					curLeft = origCurLeft;
-				}
-				curTop += obj.offsetTop;
-			}
-		}
-		return {left: curLeft, top: curTop};
-	},
-
-	/* Find an object's scroll offset on the screen.
-	   @param  obj  (element) the control
-	   @return  (number[]) offset as [left, top] */
-	_findScroll: function(obj) {
-		var isFixed = false;
-		$(obj).parents().each(function() {
-			isFixed |= $(this).css('position') == 'fixed';
-		});
-		if (isFixed) {
-			return [0, 0];
-		}
-		var scrollLeft = obj.scrollLeft;
-		var scrollTop = obj.scrollTop;
-		while (obj = obj.parentNode) {
-			scrollLeft += obj.scrollLeft || 0;
-			scrollTop += obj.scrollTop || 0;
-		}
-		return [scrollLeft, scrollTop];
-	},
-
-	/* Get a setting value, defaulting if necessary.
-	   @param  inst  (object) the instance settings
-	   @param  name  (string) the setting name
-	   @return  (any) the setting value */
-	_get: function(inst, name) {
-		return (inst.options[name] != null ?
-			inst.options[name] : $.dateEntry._defaults[name]);
+			inst.options[inst._expanded ? 'spinnerBigSize' : 'spinnerSize'][0]) + 'px 0px');
 	},
 
 	/* Extract the date value from the input field, or default to now.
 	   @param  inst  (object) the instance settings */
 	_parseDate: function(inst) {
 		var currentDate = this._extractDate(inst.input.val(), inst) ||
-			this._normaliseDate(this._determineDate(this._get(inst, 'defaultDate'), inst) || new Date());
+			this._normaliseDate(this._determineDate(inst.options.defaultDate, inst) || new Date());
 		inst._selectedYear = currentDate.getFullYear();
 		inst._selectedMonth = currentDate.getMonth();
 		inst._selectedDay = currentDate.getDate();
 		inst._lastChr = '';
-		inst._field = Math.max(0, Math.min(2, this._get(inst, 'initialField')));
+		inst._field = Math.max(0, Math.min(2, inst.options.initialField));
 		if (inst.input.val() != '') {
 			this._showDate(inst);
 		}
@@ -634,16 +582,15 @@ $.extend(DateEntry.prototype, {
 	   @param  inst   (object) the instance settings
 	   @return  (Date) the retrieved date or null if no value */
 	_extractDate: function(value, inst) {
-		var dateFormat = this._get(inst, 'dateFormat');
 		var values = value.split(
-			new RegExp('[\\' + dateFormat.substring(3).split('').join('\\') + ']'));
+			new RegExp('[\\' + inst.options.dateFormat.substring(3).split('').join('\\') + ']'));
 		var year = 0;
 		var month = 0;
 		var day = 0;
 		for (var i = 0; i < 3; i++) {
 			var num = parseInt(values[i], 10);
 			num = (isNaN(num) ? 0 : num);
-			var field = dateFormat.charAt(i);
+			var field = inst.options.dateFormat.charAt(i);
 			switch (field) {
 				case 'y': year = num; break;
 				case 'Y':
@@ -651,17 +598,16 @@ $.extend(DateEntry.prototype, {
 					break;
 				case 'm': month = num; break;
 				case 'n': case 'N': 
-					month = $.inArray(values[i], this._get(inst,
-						(field == 'N' ? 'monthNames' : 'monthNamesShort'))) + 1;
+					month = $.inArray(values[i],
+						inst.options[field == 'N' ? 'monthNames' : 'monthNamesShort']) + 1;
 					break;
 				case 'w': case 'W':
-					if (dateFormat.charAt(3) == ' ') {
+					if (inst.options.dateFormat.charAt(3) == ' ') {
 						values.splice(i, 1);
 						num = parseInt(values[i], 10);
 					}
 					else {
-						num = parseInt(values[i].substr(this._get(inst,
-							(field == 'W' ? 'dayNames' : 'dayNamesShort'))[0].length + 1), 10);
+						num = parseInt(values[i].replace(/^.* /, ''), 10);
 					}
 					num = (isNaN(num) ? 0 : num); // Fall through
 				case 'd': day = num; break;
@@ -673,7 +619,7 @@ $.extend(DateEntry.prototype, {
 	/* Set the selected date into the input field.
 	   @param  inst  (object) the instance settings */
 	_showDate: function(inst) {
-		this._setValue(inst, this._formatDate(inst, this._get(inst, 'dateFormat')));
+		this._setValue(inst, this._formatDate(inst, inst.options.dateFormat));
 		this._showField(inst);
 	},
 
@@ -697,14 +643,14 @@ $.extend(DateEntry.prototype, {
 					currentDate += this._formatNumber(inst._selectedMonth + 1);
 					break;
 				case 'n': case 'N':
-					currentDate += this._get(inst, (field == 'N' ?
-						'monthNames' : 'monthNamesShort'))[inst._selectedMonth];
+					currentDate += inst.options[field == 'N' ?
+						'monthNames' : 'monthNamesShort'][inst._selectedMonth];
 					break;
 				case 'd':
 					currentDate += this._formatNumber(inst._selectedDay);
 					break;
 				case 'w': case 'W':
-					currentDate += this._get(inst, (field == 'W' ? 'dayNames' : 'dayNamesShort'))[
+					currentDate += inst.options[field == 'W' ? 'dayNames' : 'dayNamesShort'][
 						new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay, 12).getDay()] +
 						' ' + this._formatNumber(inst._selectedDay);
 					break;
@@ -717,15 +663,14 @@ $.extend(DateEntry.prototype, {
 	   @param  inst  (object) the instance settings */
 	_showField: function(inst) {
 		var input = inst.input[0];
-		if (inst.input.is(':hidden') || $.dateEntry._lastInput != input) {
+		if (inst.input.is(':hidden') || plugin._lastInput != input) {
 			return;
 		}
-		var dateFormat = this._get(inst, 'dateFormat');
 		var start = 0;
 		for (var i = 0; i < inst._field; i++) {
-			start += this._fieldLength(inst, i, dateFormat) + 1;
+			start += this._fieldLength(inst, i, inst.options.dateFormat) + 1;
 		}
-		var end = start + this._fieldLength(inst, i, dateFormat);
+		var end = start + this._fieldLength(inst, i, inst.options.dateFormat);
 		if (input.setSelectionRange) { // Mozilla
 			input.setSelectionRange(start, end);
 		}
@@ -750,10 +695,10 @@ $.extend(DateEntry.prototype, {
 		switch (field) {
 			case 'y': return 4;
 			case 'n': case 'N':
-				return this._get(inst, (field == 'N' ? 'monthNames' : 'monthNamesShort'))
+				return inst.options[field == 'N' ? 'monthNames' : 'monthNamesShort']
 					[inst._selectedMonth].length;
 			case 'w': case 'W':
-				return this._get(inst, (field == 'W' ? 'dayNames' : 'dayNamesShort'))
+				return inst.options[field == 'W' ? 'dayNames' : 'dayNamesShort']
 					[new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay, 12).
 					getDay()].length + 3;
 			default: return 2;
@@ -772,10 +717,9 @@ $.extend(DateEntry.prototype, {
 	   @param  value  (string) the new value */
 	_setValue: function(inst, value) {
 		if (value != inst.input.val()) {
-			var altField = this._get(inst, 'altField');
-			if (altField) {
-				$(altField).val(!value ? '' : this._formatDate(inst,
-					this._get(inst, 'altFormat') || this._get(inst, 'dateFormat')));
+			if (inst.options.altField) {
+				$(inst.options.altField).val(!value ? '' : this._formatDate(inst,
+					inst.options.altFormat || inst.options.dateFormat));
 			}
 			inst.input.val(value).trigger('change');
 		}
@@ -793,7 +737,6 @@ $.extend(DateEntry.prototype, {
 		}
 		this._showField(inst);
 		inst._lastChr = '';
-		$.data(inst.input[0], PROP_NAME, inst);
 		return (atFirstLast && moveOut);
 	},
 
@@ -804,7 +747,7 @@ $.extend(DateEntry.prototype, {
 		if (inst.input.val() == '') {
 			offset = 0;
 		}
-		var field = this._get(inst, 'dateFormat').charAt(inst._field);
+		var field = inst.options.dateFormat.charAt(inst._field);
 		var year = inst._selectedYear + (field == 'y' || field == 'Y' ? offset : 0);
 		var month = inst._selectedMonth +
 			(field == 'm' || field == 'n' || field == 'N' ? offset : 0);
@@ -830,9 +773,9 @@ $.extend(DateEntry.prototype, {
 	_setDate: function(inst, date) {
 		// Normalise to base time
 		date = this._normaliseDate(
-			this._determineDate(date || this._get(inst, 'defaultDate'), inst) || new Date());
-		var minDate = this._normaliseDate(this._determineDate(this._get(inst, 'minDate'), inst));
-		var maxDate = this._normaliseDate(this._determineDate(this._get(inst, 'maxDate'), inst));
+			this._determineDate(date || inst.options.defaultDate, inst) || new Date());
+		var minDate = this._normaliseDate(this._determineDate(inst.options.minDate, inst));
+		var maxDate = this._normaliseDate(this._determineDate(inst.options.maxDate, inst));
 		// Ensure it is within the bounds set
 		date = (minDate && date < minDate ? minDate :
 			(maxDate && date > maxDate ? maxDate : date));
@@ -840,7 +783,6 @@ $.extend(DateEntry.prototype, {
 		inst._selectedMonth = date.getMonth();
 		inst._selectedDay = date.getDate();
 		this._showDate(inst);
-		$.data(inst.input[0], PROP_NAME, inst);
 	},
 
 	/* A date may be specified as an exact value or a relative one.
@@ -852,17 +794,17 @@ $.extend(DateEntry.prototype, {
 	   @return  (Date) the calculated date */
 	_determineDate: function(setting, inst) {
 		var offsetNumeric = function(offset) { // E.g. +300, -2
-			var date = $.dateEntry._normaliseDate(new Date());
+			var date = plugin._normaliseDate(new Date());
 			date.setDate(date.getDate() + offset);
 			return date;
 		};
 		var offsetString = function(offset) { // E.g. '+2m', '-1w', '+3m +10d'
-			var date = $.dateEntry._extractDate(offset, inst);
+			var date = plugin._extractDate(offset, inst);
 			if (date) {
 				return date;
 			}
 			offset = offset.toLowerCase();
-			date = $.dateEntry._normaliseDate(new Date());
+			date = plugin._normaliseDate(new Date());
 			var year = date.getFullYear();
 			var month = date.getMonth();
 			var day = date.getDate();
@@ -901,12 +843,11 @@ $.extend(DateEntry.prototype, {
 	   @param  inst  (object) the instance settings
 	   @param  chr   (ch) the new character */
 	_handleKeyPress: function(inst, chr) {
-		var dateFormat = this._get(inst, 'dateFormat');
-		if (dateFormat.substring(3).indexOf(chr) > -1) {
+		if (inst.options.dateFormat.substring(3).indexOf(chr) > -1) {
 			this._changeField(inst, +1, false);
 		}
 		else if (chr >= '0' && chr <= '9') { // Allow direct entry of date
-			var field = dateFormat.charAt(inst._field);
+			var field = inst.options.dateFormat.charAt(inst._field);
 			var key = parseInt(chr, 10);
 			var value = parseInt((inst._lastChr || '') + chr, 10);
 			var year = (field != 'y' && field != 'Y' ? inst._selectedYear : value);
@@ -922,10 +863,10 @@ $.extend(DateEntry.prototype, {
 				inst._lastChr.substr(Math.max(0, inst._lastChr.length - 2))) + chr;
 		}
 		else { // Allow text entry by month name
-			var field = dateFormat.charAt(inst._field);
+			var field = inst.options.dateFormat.charAt(inst._field);
 			if (field == 'n' || field == 'N') {
 				inst._lastChr += chr.toLowerCase();
-				var names = this._get(inst, (field == 'n' ? 'monthNamesShort' : 'monthNames'));
+				var names = inst.options[field == 'n' ? 'monthNamesShort' : 'monthNames'];
 				var findMonth = function() {
 					for (var i = 0; i < names.length; i++) {
 						if (names[i].toLowerCase().substring(0, inst._lastChr.length) == inst._lastChr) {
@@ -953,45 +894,49 @@ $.extend(DateEntry.prototype, {
 	}
 });
 
-/* jQuery extend now ignores nulls!
-   @param  target  (object) the object to update
-   @param  props   (object) the new settings 
-   @return  (object) the updated object */
-function extendRemove(target, props) {
-	$.extend(target, props);
-	for (var name in props) {
-		if (props[name] == null) {
-			target[name] = null;
-		}
+// The list of commands that return values and don't permit chaining
+var getters = ['getDate', 'isDisabled'];
+
+/* Determine whether a command is a getter and doesn't permit chaining.
+   @param  command    (string, optional) the command to run
+   @param  otherArgs  ([], optional) any other arguments for the command
+   @return  true if the command is a getter, false if not */
+function isNotChained(command, otherArgs) {
+	if (command == 'option' && (otherArgs.length == 0 ||
+			(otherArgs.length == 1 && typeof otherArgs[0] == 'string'))) {
+		return true;
 	}
-	return target;
+	return $.inArray(command, getters) > -1;
 }
 
 /* Attach the date entry functionality to a jQuery selection.
-   @param  command  (string) the command to run (optional, default 'attach')
-   @param  options  (object) the new settings to use for these countdown instances (optional)
-   @return  (jQuery) for chaining further calls */
+   @param  options  (object) the new settings to use for these instances (optional) or
+                    (string) the command to run (optional)
+   @return  (jQuery) for chaining further calls or
+            (any) getter value */
 $.fn.dateEntry = function(options) {
 	var otherArgs = Array.prototype.slice.call(arguments, 1);
-	if (typeof options == 'string' && (options == 'isDisabled' || options == 'getDate')) {
-		return $.dateEntry['_' + options + 'DateEntry'].apply($.dateEntry, [this[0]].concat(otherArgs));
+	if (isNotChained(options, otherArgs)) {
+		return plugin['_' + options + 'Plugin'].
+			apply(plugin, [this[0]].concat(otherArgs));
 	}
 	return this.each(function() {
-		var nodeName = this.nodeName.toLowerCase();
-		if (nodeName == 'input') {
-			if (typeof options == 'string') {
-				$.dateEntry['_' + options + 'DateEntry'].apply($.dateEntry, [this].concat(otherArgs));
+		if (typeof options == 'string') {
+			if (!plugin['_' + options + 'Plugin']) {
+				throw 'Unknown command: ' + options;
 			}
-			else {
-				// Check for settings on the control itself
-				var inlineSettings = ($.fn.metadata ? $(this).metadata() : {});
-				$.dateEntry._connectDateEntry(this, $.extend(inlineSettings, options));
-			}
-		} 
+			plugin['_' + options + 'Plugin'].
+				apply(plugin, [this].concat(otherArgs));
+		}
+		else {
+			// Check for settings on the control itself
+			var inlineSettings = ($.fn.metadata ? $(this).metadata() : {});
+			plugin._attachPlugin(this, $.extend({}, inlineSettings, options || {}));
+		}
 	});
 };
 
 /* Initialise the date entry functionality. */
-$.dateEntry = new DateEntry(); // Singleton instance
+var plugin = $.dateEntry = new DateEntry(); // Singleton instance
 
 })(jQuery);
