@@ -596,7 +596,7 @@ $.extend(DateEntry.prototype, {
 				case 'Y':
 					year = (num % 100) + (new Date().getFullYear() - new Date().getFullYear() % 100);
 					break;
-				case 'm': month = num; break;
+				case 'm': case 'M': month = num; break;
 				case 'n': case 'N': 
 					month = $.inArray(values[i],
 						inst.options[field == 'N' ? 'monthNames' : 'monthNamesShort']) + 1;
@@ -610,7 +610,7 @@ $.extend(DateEntry.prototype, {
 						num = parseInt(values[i].replace(/^.* /, ''), 10);
 					}
 					num = (isNaN(num) ? 0 : num); // Fall through
-				case 'd': day = num; break;
+				case 'd': case 'D': day = num; break;
 			}
 		}
 		return (year && month && day ? new Date(year, month - 1, day, 12) : null);
@@ -639,15 +639,15 @@ $.extend(DateEntry.prototype, {
 				case 'Y':
 					currentDate += this._formatNumber(inst._selectedYear % 100);
 					break;
-				case 'm':
-					currentDate += this._formatNumber(inst._selectedMonth + 1);
+				case 'm': case 'M':
+					currentDate += this._formatNumber(inst._selectedMonth + 1, field == 'M');
 					break;
 				case 'n': case 'N':
 					currentDate += inst.options[field == 'N' ?
 						'monthNames' : 'monthNamesShort'][inst._selectedMonth];
 					break;
-				case 'd':
-					currentDate += this._formatNumber(inst._selectedDay);
+				case 'd': case 'D':
+					currentDate += this._formatNumber(inst._selectedDay, field == 'D');
 					break;
 				case 'w': case 'W':
 					currentDate += inst.options[field == 'W' ? 'dayNames' : 'dayNamesShort'][
@@ -701,6 +701,10 @@ $.extend(DateEntry.prototype, {
 				return inst.options[field == 'W' ? 'dayNames' : 'dayNamesShort']
 					[new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay, 12).
 					getDay()].length + 3;
+			case 'D':
+				return inst._selectedDay < 10 ? 1 : 2;
+			case 'M':
+				return inst._selectedMonth < 9 ? 1 : 2;
 			default: return 2;
 		}
 	},
@@ -708,8 +712,8 @@ $.extend(DateEntry.prototype, {
 	/* Ensure displayed single number has a leading zero.
 	   @param  value  (number) current value
 	   @return  (string) number with at least two digits */
-	_formatNumber: function(value) {
-		return (value < 10 ? '0' : '') + value;
+	_formatNumber: function(value, hideZero) {		
+		return (!hideZero && value < 10 ? '0' : '') + value;
 	},
 
 	/* Update the input field and notify listeners.
@@ -750,8 +754,8 @@ $.extend(DateEntry.prototype, {
 		var field = inst.options.dateFormat.charAt(inst._field);
 		var year = inst._selectedYear + (field == 'y' || field == 'Y' ? offset : 0);
 		var month = inst._selectedMonth +
-			(field == 'm' || field == 'n' || field == 'N' ? offset : 0);
-		var day = (field == 'd' || field == 'w' || field == 'W' ?
+			(field == 'm' || field == 'M' || field == 'n' || field == 'N' ? offset : 0);
+		var day = (field == 'd' || field == 'D' || field == 'w' || field == 'W' ?
 			inst._selectedDay + offset :
 			Math.min(inst._selectedDay, this._getDaysInMonth(year, month)));
 		this._setDate(inst, new Date(year, month, day, 12));
@@ -808,15 +812,15 @@ $.extend(DateEntry.prototype, {
 			var year = date.getFullYear();
 			var month = date.getMonth();
 			var day = date.getDate();
-			var pattern = /([+-]?[0-9]+)\s*(d|w|m|y)?/g;
+			var pattern = /([+-]?[0-9]+)\s*(d|D|w|m|M|y)?/g;
 			var matches = pattern.exec(offset);
 			while (matches) {
 				switch (matches[2] || 'd') {
-					case 'd':
+					case 'd': case 'D':
 						day += parseInt(matches[1], 10); break;
 					case 'w':
 						day += parseInt(matches[1], 10) * 7; break;
-					case 'm':
+					case 'm': case 'M':
 						month += parseInt(matches[1], 10); break;
 					case 'y':
 						year += parseInt(matches[1], 10); break;
@@ -851,10 +855,10 @@ $.extend(DateEntry.prototype, {
 			var key = parseInt(chr, 10);
 			var value = parseInt((inst._lastChr || '') + chr, 10);
 			var year = (field != 'y' && field != 'Y' ? inst._selectedYear : value);
-			var month = (field != 'm' && field != 'n' && field != 'N' ?
+			var month = (field != 'm' && field != 'M' && field != 'n' && field != 'N' ?
 				inst._selectedMonth + 1 : (value >= 1 && value <= 12 ? value :
 				(key > 0 ? key : inst._selectedMonth + 1)));
-			var day = (field != 'd' && field != 'w' && field != 'W' ?
+			var day = (field != 'd' && field != 'D' && field != 'w' && field != 'W' ?
 				inst._selectedDay : (value >= 1 &&
 				value <= this._getDaysInMonth(year, month - 1) ? value :
 				(key > 0 ? key : inst._selectedDay)));
