@@ -2,7 +2,7 @@
    Polish initialisation for the jQuery date entry extension. 
    Polish translation by Jacek Wysocki (jacek.wysocki@gmail.com). */
 (function($) {
-	$.dateEntry.regional['pl'] = {dateFormat: 'ymd-',
+	$.dateEntry.regionalOptions['pl'] = {dateFormat: 'ymd-',
 		monthNames: ['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec',
 		'Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'],
 		monthNamesShort: ['Sty','Lut','Mar','Kwi','Maj','Cze',
@@ -10,5 +10,5 @@
 		dayNames: ['Niedziela','Poniedzialek','Wtorek','Środa','Czwartek','Piątek','Sobota'],
 		dayNamesShort: ['Nie','Pon','Wto','Śro','Czw','Pią','Sob'],
 		spinnerTexts: ['Teraz', 'Poprzednie pole', 'Następne pole', 'Zwiększ wartość', 'Zmniejsz wartość']};
-	$.dateEntry.setDefaults($.dateEntry.regional['pl']);
+	$.dateEntry.setDefaults($.dateEntry.regionalOptions['pl']);
 })(jQuery);

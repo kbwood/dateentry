@@ -2,7 +2,7 @@
    German initialisation for the jQuery date entry extension
    Written by Eyk Schulz (eyk.schulz@gmx.net) and Milian Wolff (mail@milianw.de) */
 (function($) {
-	$.dateEntry.regional['de'] = {dateFormat: 'dmy.',
+	$.dateEntry.regionalOptions['de'] = {dateFormat: 'dmy.',
 		monthNames: ['Januar','Februar','März','April','Mai','Juni',
 		'Juli','August','September','Oktober','November','Dezember'],
 		monthNamesShort: ['Jan','Feb','Mär','Apr','Mai','Jun',
@@ -10,5 +10,5 @@
 		dayNames: ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'],
 		dayNamesShort: ['So','Mo','Di','Mi','Do','Fr','Sa'],
 		spinnerTexts: ['Jetzt', 'vorheriges Feld', 'nächstes Feld', 'hoch', 'runter']};
-	$.dateEntry.setDefaults($.dateEntry.regional['de']);
+	$.dateEntry.setDefaults($.dateEntry.regionalOptions['de']);
 })(jQuery);
