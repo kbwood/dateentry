@@ -678,12 +678,18 @@
 			@param inst {object} The instance settings.
 			@return {Date} The retrieved date or <code>null</code> if no value. */
 		_extractDate: function(value, inst) {
+			var formatOptionsLength = inst.options.dateFormat.length - 1;
+			if(formatOptionsLength == 2 && !this._validTwoFormFormat(inst.options.dateFormat)) {
+				throw("Valid date format not given");
+			}
+
 			var values = value.split(
-				new RegExp('[\\' + inst.options.dateFormat.substring(3).split('').join('\\') + ']'));
+						new RegExp('[\\' + inst.options.dateFormat.substring(formatOptionsLength).split('').join('\\') + ']'));
+			if(values.length != formatOptionsLength) { throw("Given date (" + value + ") format doesn't match specified format (" + inst.options.dateFormat + ")"); }
 			var year = 0;
 			var month = 0;
 			var day = 0;
-			for (var i = 0; i < 3; i++) {
+			for (var i = 0; i < formatOptionsLength; i++) {
 				var num = parseInt(values[i], 10);
 				num = (isNaN(num) ? 0 : num);
 				var field = inst.options.dateFormat.charAt(i);
@@ -709,7 +715,21 @@
 					case 'd': day = num; break;
 				}
 			}
-			return (year && month && day ? new Date(year, month - 1, day, 12) : null);
+			return this._createDate(year, month, day)
+		},
+
+		_validTwoFormFormat: function(dateFormat) {
+			var dayGiven = /d|w/i.test(dateFormat),
+					yearGiven = /y/i.test(dateFormat);
+			if(dayGiven && yearGiven){ return false }
+			return true;
+		},
+
+		_createDate: function(year, month, day) {
+			if(year && month && day) { return new Date(year, month - 1, day, 12); }
+			else if(year && month) { return new Date(year, month - 1, 1, 12); }
+			else if(month && day) { return new Date(new Date().getFullYear(), month - 1, day, 12); }
+			else { return null }
 		},
 
 		/** Set the selected date into the input field.
@@ -727,8 +747,8 @@
 			@return {string} The formatted date. */
 		_formatDate: function(inst, format) {
 			var currentDate = '';
-			for (var i = 0; i < 3; i++) {
-				currentDate += (i === 0 ? '' : format.charAt(3));
+			for (var i = 0; i < format.length - 1; i++) {
+				currentDate += (i === 0 ? '' : format.charAt(format.length - 1));
 				var field = format.charAt(i);
 				switch (field) {
 					case 'y':
@@ -834,7 +854,8 @@
 			@param moveOut {boolean} True if can move out of the field.
 			@return {boolean} True if exiting the field, false if not. */
 		_changeField: function(inst, offset, moveOut) {
-			var atFirstLast = (inst.elem.val() === '' || inst._field === (offset === -1 ? 0 : 2));
+			var fieldCount = inst.options.dateFormat.length - 2;
+			var atFirstLast = (inst.elem.val() === '' || inst._field === (offset === -1 ? 0 : fieldCount));
 			if (!atFirstLast) {
 				inst._field += offset;
 			}
