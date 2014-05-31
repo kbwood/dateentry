@@ -1,5 +1,5 @@
 /* http://keith-wood.name/dateEntry.html
-   Date entry for jQuery v2.0.0.
+   Date entry for jQuery v2.0.1.
    Written by Keith Wood (kbwood{at}iinet.com.au) March 2009.
    Licensed under the MIT (https://github.com/jquery/jquery/blob/master/MIT-LICENSE.txt) license.
    Please attribute the author if you use it. */
@@ -42,7 +42,7 @@
 			
 		/** Default settings for the plugin.
 			@property [appendText=''] {string} Display text following the input box, e.g. showing the format.
-			@property [initialField=0] {number} The field to highlight initially.
+			@property [initialField=null] {number} The field to highlight initially, or <code>null</code> for none.
 			@property [tabToExit=false] {boolean} True for tab key to go to next element,
 						false for tab key to step through internal fields.
 			@property [useMouseWheel=true] {boolean} True to use mouse wheel for increment/decrement if possible,
@@ -77,7 +77,7 @@
 			@example {defaultDate: new Date(2013, 12-1, 25), minDate: +1, maxDate: '+2M +2W'} */
 		defaultOptions: {
 			appendText: '',
-			initialField: 0,
+			initialField: null,
 			tabToExit: false,
 			useMouseWheel: true,
 			defaultDate: null,
@@ -99,9 +99,11 @@
 			Each object has the following attributes.
 			@property [dateFormat='mdy/'] {string} The format of the date text:
 						first three fields in order ('y' for year, 'Y' for two-digit year,
-						'm' for month, 'n' for abbreviated month name, 'N' for full month name,
-						'd' for day, 'w' for abbreviated day name and number,
-						'W' for full day name and number), followed by separator(s).
+						'm' for month, 'M' for month without leading zero,
+						'n' for abbreviated month name, 'N' for full month name,
+						'd' for day, 'D' for day without leading zero,
+						'w' for abbreviated day name and number,
+						'W' for full day name and number, ' ' for nothing), followed by separator(s).
 						The first separator is used for display, while others are accepted during parsing.
 			@property [monthNames=['January','February','March','April','May','June','July','August','September','October','November','December']]
 						{string[]} The names of the months.
@@ -111,7 +113,7 @@
 						{string[]} The names of the days.
 			@property [dayNamesShort=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']]
 						{string[]} The abbreviated names of the days.
-			@property [spinnerTexts=['Today','Previous_field','Next_field','Increment','Decrement']]
+			@property [spinnerTexts=['Today','Previous&nbsp;field','Next&nbsp;field','Increment','Decrement']]
 						{string[]} The popup texts for the spinner image areas. */
 		regionalOptions: { // Available regional settings, indexed by language/country code
 			'': { // Default regional settings - English/US
@@ -153,6 +155,7 @@
 			var currentDate = this._extractDate(elem.val(), inst);
 			$.extend(inst.options, options);
 			inst._field = 0;
+			inst._lastField = (inst.options.dateFormat[2] === ' ' ? 1 : 2);
 			if (currentDate) {
 				this._setDate(inst, currentDate);
 			}
@@ -268,16 +271,15 @@
 		_doFocus: function(elem) {
 			var input = (elem.nodeName && elem.nodeName.toLowerCase() === 'input' ? elem : this);
 			if (plugin._lastInput === input || plugin.isDisabled(input)) {
-				plugin._focussed = false;
 				return;
 			}
 			var inst = plugin._getInst(input);
-			plugin._focussed = true;
+			inst._field = 0;
 			plugin._lastInput = input;
 			plugin._blurredInput = null;
 			$.extend(inst.options, ($.isFunction(inst.options.beforeShow) ?
 				inst.options.beforeShow.apply(input, [input]) : {}));
-			plugin._parseDate(inst);
+			plugin._parseDate(inst, elem.nodeName ? null : elem);
 			setTimeout(function() { plugin._showField(inst); }, 10);
 		},
 
@@ -296,44 +298,52 @@
 			var input = event.target;
 			var inst = plugin._getInst(input);
 			var prevField = inst._field;
-			if (!plugin._focussed) {
-				inst._field = 0;
-				if (input.selectionStart !== null) { // Use input select range
-					var end = 0;
-					for (var field = 0; field < 3; field++) {
-						end += plugin._fieldLength(inst, field, inst.options.dateFormat) + 1;
-						inst._field = field;
-						if (input.selectionStart < end) {
-							break;
-						}
-					}
-				}
-				else if (input.createTextRange) { // Check against bounding boxes
-					var src = $(event.srcElement);
-					var range = input.createTextRange();
-					var convert = function(value) {
-						return {thin: 2, medium: 4, thick: 6}[value] || value;
-					};
-					var offsetX = event.clientX + document.documentElement.scrollLeft -
-						(src.offset().left + parseInt(convert(src.css('border-left-width')), 10)) -
-						range.offsetLeft; // Position - left edge - alignment
-					var end = 0;
-					for (var field = 0; field < 3; field++) {
-						end += plugin._fieldLength(inst, field, inst.options.dateFormat) + 1;
-						range.collapse();
-						range.moveEnd('character', end);
-						inst._field = field;
-						if (offsetX < range.boundingWidth) { // And compare
-							break;
-						}
-					}
-				}
-			}
+			inst._field = plugin._getSelection(inst, input, event);
 			if (prevField !== inst._field) {
 				inst._lastChr = '';
 			}
 			plugin._showField(inst);
-			plugin._focussed = false;
+		},
+
+		/** Find the selected subfield within the control.
+			@private
+			@param inst {object} The current instance settings.
+			@param input {Element} The input control.
+			@param event {Event} The triggering event.
+			@return {number} The selected subfield. */
+		_getSelection: function(inst, input, event) {
+			var select = 0;
+			if (typeof input.selectionStart !== 'undefined') { // Use input select range
+				var end = 0;
+				for (var field = 0; field <= inst._lastField; field++) {
+					end += plugin._fieldLength(inst, field, inst.options.dateFormat) + 1;
+					select = field;
+					if (input.selectionStart < end) {
+						break;
+					}
+				}
+			}
+			else if (input.createTextRange && event != null && $(input).val()) { // Check against bounding boxes
+				var src = $(event.target || event.srcElement);
+				var range = input.createTextRange();
+				var convert = function(value) {
+					return {thin: 2, medium: 4, thick: 6}[value] || value;
+				};
+				var offsetX = (event.clientX || 0) + document.documentElement.scrollLeft -
+					(src.offset().left + parseInt(convert(src.css('border-left-width')), 10)) -
+					range.offsetLeft; // Position - left edge - alignment
+				var end = 0;
+				for (var field = 0; field <= inst._lastField; field++) {
+					end += plugin._fieldLength(inst, field, inst.options.dateFormat) + 1;
+					range.collapse();
+					range.moveEnd('character', end);
+					select = field;
+					if (offsetX < range.boundingWidth) { // And compare
+						break;
+					}
+				}
+			}
+			return select;
 		},
 
 		/** Handle keystrokes in the field.
@@ -355,7 +365,7 @@
 							plugin._setValue(inst, '');
 						}
 						else { // Last field on end
-							inst._field = 2;
+							inst._field = inst._lastField;
 							plugin._adjustField(inst, 0);
 						}
 						break;
@@ -403,13 +413,12 @@
 				var field = inst.options.dateFormat.charAt(inst._field);
 				var key = parseInt(chr, 10);
 				var value = parseInt((inst._lastChr || '') + chr, 10);
-				var year = (field !== 'y' && field !== 'Y' ? inst._selectedYear : value);
-				var month = (field !== 'm' && field !== 'n' && field !== 'N' ?
-					inst._selectedMonth + 1 : (value >= 1 && value <= 12 ? value :
+				var year = (!field.match(/y/i) ? inst._selectedYear : value);
+				var month = (!field.match(/m|n/i) ? inst._selectedMonth + 1 :
+					(value >= 1 && value <= 12 ? value :
 					(key > 0 ? key : inst._selectedMonth + 1)));
-				var day = (field !== 'd' && field !== 'w' && field !== 'W' ?
-					inst._selectedDay : (value >= 1 &&
-					value <= this._getDaysInMonth(year, month - 1) ? value :
+				var day = (!field.match(/d|w/i) ? inst._selectedDay :
+					(value >= 1 && value <= this._getDaysInMonth(year, month - 1) ? value :
 					(key > 0 ? key : inst._selectedDay)));
 				this._setDate(inst, new Date(year, month - 1, day, 12));
 				inst._lastChr = (field !== 'y' ? '' :
@@ -417,7 +426,7 @@
 			}
 			else { // Allow text entry by month name
 				var field = inst.options.dateFormat.charAt(inst._field);
-				if (field === 'n' || field === 'N') {
+				if (field.match(/n/i)) {
 					inst._lastChr += chr.toLowerCase();
 					var names = inst.options[field === 'n' ? 'monthNamesShort' : 'monthNames'];
 					var findMonth = function() {
@@ -658,17 +667,29 @@
 
 		/** Extract the date value from the input field, or default to now.
 			@private
-			@param inst {object} The instance settings. */
-		_parseDate: function(inst) {
+			@param inst {object} The instance settings.
+			@param event {Event} The triggering event or <code>null</code>. */
+		_parseDate: function(inst, event) {
 			var currentDate = this._extractDate(inst.elem.val(), inst) ||
 				this._normaliseDate(this._determineDate(inst.options.defaultDate, inst) || new Date());
 			inst._selectedYear = currentDate.getFullYear();
 			inst._selectedMonth = currentDate.getMonth();
 			inst._selectedDay = currentDate.getDate();
 			inst._lastChr = '';
-			inst._field = Math.max(0, Math.min(2, inst.options.initialField));
-			if (inst.elem.val() !== '') {
-				this._showDate(inst);
+			var postProcess = function() {
+				if (inst.elem.val() !== '') {
+					plugin._showDate(inst);
+				}
+			};
+			if (typeof inst.options.initialField === 'number') {
+				inst._field = Math.max(0, Math.min(inst._lastField, inst.options.initialField));
+				postProcess();
+			}
+			else {
+				setTimeout(function() {
+					inst._field = plugin._getSelection(inst, inst.elem[0], event);
+					postProcess();
+				}, 0);
 			}
 		},
 
@@ -678,24 +699,36 @@
 			@param inst {object} The instance settings.
 			@return {Date} The retrieved date or <code>null</code> if no value. */
 		_extractDate: function(value, inst) {
+			if (!value) {
+				return null;
+			}
 			var values = value.split(
 				new RegExp('[\\' + inst.options.dateFormat.substring(3).split('').join('\\') + ']'));
 			var year = 0;
 			var month = 0;
 			var day = 0;
-			for (var i = 0; i < 3; i++) {
+			var seen = [false, false, false];
+			for (var i = 0; i <= inst._lastField; i++) {
 				var num = parseInt(values[i], 10);
 				num = (isNaN(num) ? 0 : num);
 				var field = inst.options.dateFormat.charAt(i);
 				switch (field) {
-					case 'y': year = num; break;
+					case 'y':
+						year = num; 
+						seen[0] = true; 
+						break;
 					case 'Y':
 						year = (num % 100) + (new Date().getFullYear() - new Date().getFullYear() % 100);
+						seen[0] = true; 
 						break;
-					case 'm': month = num; break;
+					case 'm': case 'M':
+						month = num; 
+						seen[1] = true; 
+						break;
 					case 'n': case 'N': 
 						month = $.inArray(values[i],
 							inst.options[field === 'N' ? 'monthNames' : 'monthNamesShort']) + 1;
+						seen[1] = true; 
 						break;
 					case 'w': case 'W':
 						if (inst.options.dateFormat.charAt(3) === ' ') {
@@ -706,9 +739,15 @@
 							num = parseInt(values[i].replace(/^.* /, ''), 10);
 						}
 						num = (isNaN(num) ? 0 : num); // Fall through
-					case 'd': day = num; break;
+					case 'd': case 'D':
+						day = num; 
+						seen[2] = true; 
+						break;
 				}
 			}
+			year = seen[0] ? year : 2000;
+			month = seen[1] ? month : 1;
+			day = seen[2] ? day : 1;
 			return (year && month && day ? new Date(year, month - 1, day, 12) : null);
 		},
 
@@ -727,7 +766,7 @@
 			@return {string} The formatted date. */
 		_formatDate: function(inst, format) {
 			var currentDate = '';
-			for (var i = 0; i < 3; i++) {
+			for (var i = 0; i <= inst._lastField; i++) {
 				currentDate += (i === 0 ? '' : format.charAt(3));
 				var field = format.charAt(i);
 				switch (field) {
@@ -740,12 +779,18 @@
 					case 'm':
 						currentDate += this._formatNumber(inst._selectedMonth + 1);
 						break;
+					case 'M':
+						currentDate += (inst._selectedMonth + 1);
+						break;
 					case 'n': case 'N':
 						currentDate += inst.options[field === 'N' ?
 							'monthNames' : 'monthNamesShort'][inst._selectedMonth];
 						break;
 					case 'd':
 						currentDate += this._formatNumber(inst._selectedDay);
+						break;
+					case 'D':
+						currentDate += inst._selectedDay;
 						break;
 					case 'w': case 'W':
 						currentDate += inst.options[field === 'W' ? 'dayNames' : 'dayNamesShort'][
@@ -794,6 +839,7 @@
 			field = dateFormat.charAt(field);
 			switch (field) {
 				case 'y': return 4;
+				case 'M': return (inst._selectedMonth < 9 ? 1 : 2);
 				case 'n': case 'N':
 					return inst.options[field === 'N' ? 'monthNames' : 'monthNamesShort']
 						[inst._selectedMonth].length;
@@ -801,6 +847,7 @@
 					return inst.options[field === 'W' ? 'dayNames' : 'dayNamesShort']
 						[new Date(inst._selectedYear, inst._selectedMonth, inst._selectedDay, 12).
 						getDay()].length + 3;
+				case 'D': return (inst._selectedDay < 10 ? 1 : 2);
 				default: return 2;
 			}
 		},
@@ -834,7 +881,7 @@
 			@param moveOut {boolean} True if can move out of the field.
 			@return {boolean} True if exiting the field, false if not. */
 		_changeField: function(inst, offset, moveOut) {
-			var atFirstLast = (inst.elem.val() === '' || inst._field === (offset === -1 ? 0 : 2));
+			var atFirstLast = (inst.elem.val() === '' || inst._field === (offset === -1 ? 0 : inst._lastField));
 			if (!atFirstLast) {
 				inst._field += offset;
 			}
@@ -852,11 +899,9 @@
 				offset = 0;
 			}
 			var field = inst.options.dateFormat.charAt(inst._field);
-			var year = inst._selectedYear + (field === 'y' || field === 'Y' ? offset : 0);
-			var month = inst._selectedMonth +
-				(field === 'm' || field === 'n' || field === 'N' ? offset : 0);
-			var day = (field === 'd' || field === 'w' || field === 'W' ?
-				inst._selectedDay + offset :
+			var year = inst._selectedYear + (field.match(/y/i) ? offset : 0);
+			var month = inst._selectedMonth + (field.match(/m|n/i) ? offset : 0);
+			var day = (field.match(/d|w/i) ? inst._selectedDay + offset :
 				Math.min(inst._selectedDay, this._getDaysInMonth(year, month)));
 			this._setDate(inst, new Date(year, month, day, 12));
 		},
