@@ -1,0 +1,22 @@
+{
+  "name": "dateentry",
+  "version": "1.1.1",
+  "homepage": "http://keith-wood.name/dateEntry.html",
+  "authors": [
+    "Keith Wood"
+  ],
+  "description": "This plugin sets an input field up to accept a date value using a spinner or the keyboard.",
+  "main": "jquery.dateentry.min.js",
+  "keywords": [
+    "jquery",
+    "dateentry"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
